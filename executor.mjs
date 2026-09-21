@@ -11,7 +11,7 @@ export function createExecutor(runAsync) {
   }
 
   return {
-    async runAgent({ repoPath, sessionId, config, skillPath, message }) {
+    async runAgent({ repoPath, sessionId, config, skillPath, message, workRoot, repoName }) {
       const args = [
         "--print", "--mode", "json",
         "--session-id", sessionId,
@@ -23,10 +23,10 @@ export function createExecutor(runAsync) {
       ];
 
       // Persist the streamed transcript so a run can be watched live:
-      //   tail -f handoff/logs/<sessionId>.jsonl
+      //   tail -f work/<repo>/logs/<sessionId>.jsonl
       let logPath;
       try {
-        const logDir = join(repoPath, "handoff", "logs");
+        const logDir = join(workRoot, repoName, "logs");
         mkdirSync(logDir, { recursive: true });
         logPath = join(logDir, `${sessionId}.jsonl`);
         appendFileSync(logPath, `\n===== ${new Date().toISOString()} =====\n`);
@@ -40,7 +40,7 @@ export function createExecutor(runAsync) {
   };
 }
 
-export function readPlan(repoPath, identifier) {
-  const p = join(repoPath, "handoff", "plans", `${identifier}.md`);
+export function readPlan(workRoot, repoName, identifier) {
+  const p = join(workRoot, repoName, "plans", `${identifier}.md`);
   return existsSync(p) ? readFileSync(p, "utf8") : null;
 }

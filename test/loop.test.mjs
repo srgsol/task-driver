@@ -26,7 +26,7 @@ function makeDeps(opts = {}) {
   const gh = { createPR: (a) => { calls.createPR.push(a); return { url: "https://x/pull/1", number: 1 }; }, ...opts.gh };
   const executor = { runAgent: async (a) => { calls.runAgent.push(a); return agentResults[Math.min(agentCall++, agentResults.length - 1)]; } };
   const config = { repos: [{ name: "tiktak", path: "/r", team: "SER", remote: "g" }], attempts: 2, timeoutMs: 1, thinking: "medium" };
-  const loop = createLoop({ config, skillPath: "/sk.md", linear, git, gates, gh, executor, readPlan: opts.readPlan ?? (() => null), log: () => {} });
+  const loop = createLoop({ config, skillPath: "/sk.md", linear, git, gates, gh, executor, workRoot: "/w", readPlan: opts.readPlan ?? (() => null), log: () => {} });
   return { loop, calls };
 }
 

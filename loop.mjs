@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { branchName } from "./slug.mjs";
 import { readPlan as readPlanFromDisk } from "./executor.mjs";
 
@@ -13,7 +14,7 @@ export function upsertPlanSection(description, plan) {
   return [stripped, block].filter((s) => s.length > 0).join("\n\n");
 }
 
-export function createLoop({ config, skillPath, linear, git, gates, gh, executor, readPlan = readPlanFromDisk, log = () => {} }) {
+export function createLoop({ config, skillPath, linear, git, gates, gh, executor, workRoot, readPlan = readPlanFromDisk, log = () => {} }) {
   const issuePrompt = (issue, branch) =>
     [`Implement ${issue.identifier}: ${issue.title}`, "", issue.description || "(no description)", "", `Branch: ${branch}`].join("\n");
 
@@ -38,6 +39,8 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
   async function processIssue(repo, issue, dryRun) {
     const branch = branchName(issue.identifier, issue.title);
     const sessionId = `handoff-${repo.name}-${issue.identifier}`;
+    const logPath = join(workRoot, repo.name, "logs", `${sessionId}.jsonl`);
+    const planPath = join(workRoot, repo.name, "plans", `${issue.identifier}.md`);
 
     if (dryRun) {
       log(`  [dry] would claim ${issue.identifier} → In Progress`);
@@ -58,18 +61,18 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
     log(`→ ${issue.identifier}: ${issue.title} (${branch})`);
     git.checkout(repo.path, BASE_BRANCH);
     git.createBranch(repo.path, branch);
-    log(`  watch: tail -f ${repo.path}/handoff/logs/${sessionId}.jsonl`);
+    log(`  watch: tail -f ${logPath}`);
 
-    const first = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: issuePrompt(issue, branch) });
+    const first = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: issuePrompt(issue, branch), workRoot, repoName: repo.name });
     let v = verify(repo, branch, first);
 
     if (!v.ok && config.attempts > 1) {
       log(`  attempt 1 failed (exit=${first.exitCode}, timedOut=${first.timedOut}, pushed=${v.pushed}, green=${v.gatesResult.green})`);
-      const second = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: repairPrompt(issue, branch, first) });
+      const second = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: repairPrompt(issue, branch, first), workRoot, repoName: repo.name });
       v = verify(repo, branch, second);
     }
 
-    const plan = readPlan(repo.path, issue.identifier);
+    const plan = readPlan(workRoot, repo.name, issue.identifier);
 
     if (plan) {
       try {

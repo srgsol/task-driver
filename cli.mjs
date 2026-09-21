@@ -10,6 +10,7 @@ import { createLoop } from "./loop.mjs";
 import { runSync, runAsync } from "./sh.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const workRoot = join(here, "work");
 
 function parseArgs(argv) {
   const args = { dryRun: false, configPath: join(here, "handoff.config.json") };
@@ -17,7 +18,7 @@ function parseArgs(argv) {
     if (argv[i] === "--dry-run") args.dryRun = true;
     else if (argv[i] === "--config") args.configPath = argv[++i];
     else if (argv[i] === "--help" || argv[i] === "-h") {
-      console.log("usage: node handoff/cli.mjs [--dry-run] [--config path]");
+      console.log("usage: node cli.mjs [--dry-run] [--config path]");
       process.exit(0);
     }
   }
@@ -41,6 +42,7 @@ async function main() {
     gates: createGates(runSync),
     gh: createGh(runSync),
     executor: createExecutor(runAsync),
+    workRoot,
     log: console.log,
   });
 
