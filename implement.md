@@ -8,6 +8,9 @@ questions or wait for approval. Make the call and proceed.
 
 - The issue (title + description) is in the message that invoked you.
 - The target branch is also in that message. You are already on it.
+- Your message contains a `## Configuration` section with:
+  - **Plan path** — the absolute file to write your implementation plan to.
+  - **Gates** — the commands to run until they are all green.
 
 ## Definition of done
 
@@ -40,7 +43,7 @@ committed locally but not pushed is a failed run.
    - For non-trivial work, work through the key design questions; for each,
      **accept the recommended/default answer** and record the assumption.
    - Choose the simplest approach that satisfies the issue.
-   - Always write the plan to `handoff/plans/<ISSUE>.md` (create the
+   - Write the plan to the **`Plan path`** from your task message (create the
      directory if needed). For trivial changes — or when the implementation is
      already done (e.g. a repair pass) — a one-liner is enough, e.g.
      "Trivial change, no plan required to do the implementation." You may
@@ -51,22 +54,16 @@ committed locally but not pushed is a failed run.
      make it pass (TDD).
    - **Improvement / new feature** — implement, and add test coverage for the
      new or changed behaviour.
-4. Run the quality gates until all green:
-   - `npm test`
-   - `npx tsc --noEmit`
-   - `npm run lint`
+4. Run the **Gates** from your task message until all are green.
 5. Commit and push (see "Definition of done").
 
 ## Hard rules
 
 - Stay on `<BRANCH>`. Never switch branches, merge, or rebase.
-- Commit ONLY your source changes — do NOT add `handoff/plans/`,
-  `handoff/logs/`, or build artifacts.
+- Commit ONLY your source changes — do NOT add build artifacts.
 - Do NOT open a PR, and do NOT touch Linear (you have no Linear tools).
 - Do NOT run `gh` (you have no GitHub token).
-- Do NOT modify CI config, dependencies, or the `handoff/` directory itself
-  unless the issue requires it.
-- Work from this repo's own source; don't spelunk `node_modules/` or the
-  `handoff/` controller internals.
+- Do NOT modify CI config or dependencies unless the issue requires it.
+- Work from this repo's own source; don't spelunk `node_modules/`.
 - If the gates cannot be made green, do the best you can, commit and push, and
   stop — the orchestrator handles the rest.

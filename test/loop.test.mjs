@@ -25,7 +25,11 @@ function makeDeps(opts = {}) {
   };
   const gh = { createPR: (a) => { calls.createPR.push(a); return { url: "https://x/pull/1", number: 1 }; }, ...opts.gh };
   const executor = { runAgent: async (a) => { calls.runAgent.push(a); return agentResults[Math.min(agentCall++, agentResults.length - 1)]; } };
-  const config = { repos: [{ name: "tiktak", path: "/r", team: "SER", remote: "g" }], attempts: 2, timeoutMs: 1, thinking: "medium" };
+  const config = { repos: [{ name: "tiktak", path: "/r", team: "SER", remote: "g", gates: [
+    { name: "test", cmd: "npm", args: ["test"] },
+    { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },
+    { name: "lint", cmd: "npm", args: ["run", "lint"] },
+  ] }], attempts: 2, timeoutMs: 1, thinking: "medium" };
   const loop = createLoop({ config, skillPath: "/sk.md", linear, git, gates, gh, executor, workRoot: "/w", readPlan: opts.readPlan ?? (() => null), log: () => {} });
   return { loop, calls };
 }
@@ -135,4 +139,29 @@ test("upsertPlanSection appends and is idempotent", () => {
   assert.match(twice, /# new plan/);
   assert.doesNotMatch(twice, /# plan\n/);
   assert.match(upsertPlanSection("Original text", "# plan"), /Original text/);
+});
+
+test("agent message includes the plan path and gates", async () => {
+  const { loop, calls } = makeDeps();
+  await loop(false);
+  const msg = calls.runAgent[0].message;
+  assert.match(msg, /## Configuration/);
+  assert.match(msg, /Plan path: \/w\/tiktak\/plans\/SER-9\.md/);
+  assert.match(msg, /- npm test/);
+  assert.match(msg, /- npx tsc --noEmit/);
+  assert.match(msg, /- npm run lint/);
+});
+
+test("repair message uses injected gates, not the old literal list", async () => {
+  const { loop, calls } = makeDeps({
+    agentResults: [
+      { exitCode: 1, timedOut: false, stdout: "boom", stderr: "" },
+      { exitCode: 0, timedOut: false, stdout: "", stderr: "" },
+    ],
+  });
+  await loop(false);
+  const msg = calls.runAgent[1].message;
+  assert.doesNotMatch(msg, /npm test, npx tsc --noEmit, npm run lint/);
+  assert.match(msg, /## Configuration/);
+  assert.match(msg, /- npm test/);
 });

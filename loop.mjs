@@ -15,15 +15,20 @@ export function upsertPlanSection(description, plan) {
 }
 
 export function createLoop({ config, skillPath, linear, git, gates, gh, executor, workRoot, readPlan = readPlanFromDisk, log = () => {} }) {
-  const issuePrompt = (issue, branch) =>
-    [`Implement ${issue.identifier}: ${issue.title}`, "", issue.description || "(no description)", "", `Branch: ${branch}`].join("\n");
+  const gatesList = (repo) => repo.gates.map((g) => `- ${g.cmd} ${g.args.join(" ")}`).join("\n");
+  const configBlock = (planPath, repo) =>
+    ["## Configuration", `Plan path: ${planPath}`, "Gates (run until all green):", gatesList(repo)].join("\n");
 
-  const repairPrompt = (issue, branch, result) => {
+  const issuePrompt = (issue, branch, planPath, repo) =>
+    [`Implement ${issue.identifier}: ${issue.title}`, "", issue.description || "(no description)", "", `Branch: ${branch}`, "", configBlock(planPath, repo)].join("\n");
+
+  const repairPrompt = (issue, branch, result, planPath, repo) => {
     const tail = `${result.stdout}\n${result.stderr}`.slice(-4000);
     return [
       `Your previous attempt for ${issue.identifier} did not pass verification.`,
       "", "Output so far:", "```", tail, "```", "",
-      `Fix it, re-run the three gates (npm test, npx tsc --noEmit, npm run lint), commit, and push branch ${branch}.`,
+      `Fix it, re-run the gates listed under \`Gates\` below, commit, and push branch ${branch}.`,
+      "", configBlock(planPath, repo),
     ].join("\n");
   };
 
@@ -63,12 +68,12 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
     git.createBranch(repo.path, branch);
     log(`  watch: tail -f ${logPath}`);
 
-    const first = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: issuePrompt(issue, branch), workRoot, repoName: repo.name });
+    const first = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: issuePrompt(issue, branch, planPath, repo), workRoot, repoName: repo.name });
     let v = verify(repo, branch, first);
 
     if (!v.ok && config.attempts > 1) {
       log(`  attempt 1 failed (exit=${first.exitCode}, timedOut=${first.timedOut}, pushed=${v.pushed}, green=${v.gatesResult.green})`);
-      const second = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: repairPrompt(issue, branch, first), workRoot, repoName: repo.name });
+      const second = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: repairPrompt(issue, branch, first, planPath, repo), workRoot, repoName: repo.name });
       v = verify(repo, branch, second);
     }
 
