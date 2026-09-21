@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createExecutor, readPlan } from "../executor.mjs";
+import { createExecutor, readPlan } from "../src/executor.mjs";
 
 test("runAgent strips Linear and GitHub tokens from child env", async () => {
   let seenEnv;

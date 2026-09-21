@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "task-driver": "node cli.mjs",
-    "task-driver:dry": "node cli.mjs --dry-run",
+    "task-driver": "node src/cli.mjs",
+    "task-driver:dry": "node src/cli.mjs --dry-run",
     "test": "node --test \"test/*.test.mjs\""
   }
 }

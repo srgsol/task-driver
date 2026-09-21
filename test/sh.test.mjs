@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runSync, runAsync } from "../sh.mjs";
+import { runSync, runAsync } from "../src/sh.mjs";
 
 test("runSync captures stdout and status", () => {
   const r = runSync("node", ["-e", "process.stdout.write('ok')"]);

@@ -47,6 +47,18 @@ npm test               # unit tests (node --test, no dependencies)
 `repos[].path` is resolved relative to `task-driver.config.json`, so you can run
 from any directory.
 
+## Project layout
+
+```
+src/                      # application source (CLI + controller modules)
+test/                     # unit tests (node --test, no dependencies)
+docs/                     # design and handoff docs
+work/                     # per-run logs and plans (gitignored)
+task-driver.config.json   # repo + gate configuration
+implement.md              # agent skill/prompt injected into pi runs
+package.json
+```
+
 ## Configuration
 
 `task-driver.config.json`:
@@ -76,7 +88,7 @@ from any directory.
 ### Gates
 
 When a repo omits `gates`, a default set is applied (defined as `DEFAULT_GATES`
-in `config.mjs`):
+in `src/config.mjs`):
 
 | Name | Command |
 |---|---|

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createGh, getGhToken } from "../gh.mjs";
+import { createGh, getGhToken } from "../src/gh.mjs";
 
 test("getGhToken reads unquoted token from .env", () => {
   const dir = mkdtempSync(join(tmpdir(), "gh-"));

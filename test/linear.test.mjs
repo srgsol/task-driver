@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createLinearClient } from "../linear.mjs";
+import { createLinearClient } from "../src/linear.mjs";
 
 function fakeFetch(handler) {
   return async (url, opts) => {

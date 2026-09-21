@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createGit } from "../git.mjs";
+import { createGit } from "../src/git.mjs";
 
 const ok = { status: 0, stdout: "", stderr: "" };
 

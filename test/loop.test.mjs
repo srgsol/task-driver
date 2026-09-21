@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createLoop, upsertPlanSection } from "../loop.mjs";
+import { createLoop, upsertPlanSection } from "../src/loop.mjs";
 
 function makeDeps(opts = {}) {
   const calls = { moveState: [], comments: [], updateDescription: [], checkout: [], createBranch: [], runAgent: [], createPR: [], pushBranch: [] };
