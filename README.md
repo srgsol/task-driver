@@ -68,21 +68,67 @@ from any directory.
 | `repos[].path` | Checkout location, relative to this config file |
 | `repos[].team` | Linear team key to poll |
 | `repos[].remote` | Informational (push uses the checkout's own remote) |
-| `repos[].gates` | Optional; defaults to `npm test`, `npx tsc --noEmit`, `npm run lint` |
+| `repos[].gates` | Optional; the full list to run. When omitted, `DEFAULT_GATES` applies: `npm test`, `npx tsc --noEmit`, `npm run lint`. When present, it **replaces** the defaults entirely — list every gate you want, including `test`, since there is no merge. See [Gates](#gates). |
 | `attempts` | Max `pi` runs per issue (1 = no repair pass) |
 | `timeoutMs` | Wall-clock cap per `pi` run (`900000` = 15 min) |
 | `thinking` | `pi --thinking` level (`off`…`max`) |
 
-Per-repo gates example:
+### Gates
+
+When a repo omits `gates`, a default set is applied (defined as `DEFAULT_GATES`
+in `config.mjs`):
+
+| Name | Command |
+|---|---|
+| `test` | `npm test` |
+| `tsc` | `npx tsc --noEmit` |
+| `lint` | `npm run lint` |
+
+**Providing `gates` replaces the defaults, it does not extend them.** If a repo
+lacks TypeScript or a `lint` script, omit the defaults and list every gate it
+actually has:
 
 ```json
-{ "name": "tiktak", "path": "../tiktak", "team": "SER", "remote": "git@github.com:srgsol/tiktak.git",
+{ "name": "task-driver", "path": ".", "team": "SER", "remote": "git@github.com:srgsol/task-driver.git",
   "gates": [
-    { "name": "test", "cmd": "npm", "args": ["test"] },
-    { "name": "tsc",  "cmd": "npx", "args": ["tsc", "--noEmit"] },
-    { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
+    { "name": "test", "cmd": "npm", "args": ["test"] }
   ] }
 ```
+
+A repo that wants the default three plus an extra one lists all four explicitly.
+
+## Adding a repository
+
+To bring a new repository under the controller, do the following:
+
+1. **Checkout** the target repo at a known path (repos live as siblings of this
+   repo by default, e.g. `../<repo>`).
+2. **Ensure a clean `master`** — the controller creates each issue's branch from
+   `master` and returns to it afterwards (see [Rules](#rules)).
+3. **Credentials** — a fine-grained `GITHUB_TOKEN` in the target repo's
+   gitignored `.env` (injected per `gh` command as `GH_TOKEN`), plus SSH push
+   access to its remote. Never run `gh auth login`. See the global `gh-auth`
+   skill.
+4. **Linear label** — the `task-driver` label must exist in the repo's Linear
+   team (the controller only picks `Todo` + `task-driver`-labeled issues).
+5. **Add an entry** to `repos` in `task-driver.config.json`. `path` is resolved
+   relative to this config file. Set `gates` only if the repo's gates differ
+   from the defaults — and when you do, list *every* gate the repo has, since
+   `gates` replaces `DEFAULT_GATES` (see [Gates](#gates)):
+
+```json
+{ "name": "<repo>", "path": "../<repo>", "team": "SER", "remote": "git@github.com:srgsol/<repo>.git" }
+```
+
+6. **Verify** with a dry run, which lists the plan without changing anything:
+
+```bash
+npm run task-driver:dry
+```
+
+Right now this is a manual edit to `task-driver.config.json`. There is a Linear
+issue tracking a CLI option to add a repository (`task-driver add-repo`):
+[SER-25](https://linear.app/sergisoler/issue/SER-25/add-task-driver-add-repo-cli-subcommand).
 
 ## Conventions
 
