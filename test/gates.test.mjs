@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createGates } from "../gates.mjs";
+import { createGates } from "../src/gates.mjs";
 
 const gates = [
   { name: "test", cmd: "npm", args: ["test"] },

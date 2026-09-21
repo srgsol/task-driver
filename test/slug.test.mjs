@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { slugify, branchName } from "../slug.mjs";
+import { slugify, branchName } from "../src/slug.mjs";
 
 test("slugify lowercases and kebab-cases", () => {
   assert.equal(slugify("Fix Step Drag Handles"), "fix-step-drag-handles");

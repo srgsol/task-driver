@@ -10,15 +10,16 @@ import { createLoop } from "./loop.mjs";
 import { runSync, runAsync } from "./sh.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const workRoot = join(here, "work");
+const root = dirname(here);
+const workRoot = join(root, "work");
 
 function parseArgs(argv) {
-  const args = { dryRun: false, configPath: join(here, "task-driver.config.json") };
+  const args = { dryRun: false, configPath: join(root, "task-driver.config.json") };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--dry-run") args.dryRun = true;
     else if (argv[i] === "--config") args.configPath = argv[++i];
     else if (argv[i] === "--help" || argv[i] === "-h") {
-      console.log("usage: node cli.mjs [--dry-run] [--config path]");
+      console.log("usage: node src/cli.mjs [--dry-run] [--config path]");
       process.exit(0);
     }
   }
@@ -36,7 +37,7 @@ async function main() {
 
   const loop = createLoop({
     config,
-    skillPath: join(here, "implement.md"),
+    skillPath: join(root, "implement.md"),
     linear: createLinearClient(apiKey),
     git: createGit(runSync),
     gates: createGates(runSync),

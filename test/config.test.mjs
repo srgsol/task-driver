@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { loadConfig, validateConfig, DEFAULTS, DEFAULT_GATES } from "../config.mjs";
+import { loadConfig, validateConfig, DEFAULTS, DEFAULT_GATES } from "../src/config.mjs";
 
 test("validateConfig applies defaults", () => {
   const c = validateConfig({ repos: [{ name: "tiktak", path: ".", team: "SER", remote: "git@github.com:x/y.git" }] });
