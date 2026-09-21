@@ -1,0 +1,11 @@
+{
+  "name": "handoff",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "handoff": "node cli.mjs",
+    "handoff:dry": "node cli.mjs --dry-run",
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}

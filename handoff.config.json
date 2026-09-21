@@ -1,0 +1,8 @@
+{
+  "repos": [
+    { "name": "tiktak", "path": ".", "team": "SER", "remote": "git@github.com:srgsol/tiktak.git" }
+  ],
+  "attempts": 2,
+  "timeoutMs": 900000,
+  "thinking": "medium"
+}
