@@ -28,10 +28,10 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
 
   const gatesSummary = (r) => r.results.map((x) => `- \`${x.name}\`: ${x.passed ? "passed" : "FAILED"}`).join("\n");
 
-  function verify(repoPath, branch, result) {
+  function verify(repo, branch, result) {
     let pushed = false;
-    try { pushed = git.branchPushed(repoPath, branch); } catch { /* ignore */ }
-    const gatesResult = gates.runGates(repoPath);
+    try { pushed = git.branchPushed(repo.path, branch); } catch { /* ignore */ }
+    const gatesResult = gates.runGates(repo);
     return { ok: result.exitCode === 0 && !result.timedOut && pushed && gatesResult.green, pushed, gatesResult };
   }
 
@@ -61,12 +61,12 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
     log(`  watch: tail -f ${repo.path}/handoff/logs/${sessionId}.jsonl`);
 
     const first = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: issuePrompt(issue, branch) });
-    let v = verify(repo.path, branch, first);
+    let v = verify(repo, branch, first);
 
     if (!v.ok && config.attempts > 1) {
       log(`  attempt 1 failed (exit=${first.exitCode}, timedOut=${first.timedOut}, pushed=${v.pushed}, green=${v.gatesResult.green})`);
       const second = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: repairPrompt(issue, branch, first) });
-      v = verify(repo.path, branch, second);
+      v = verify(repo, branch, second);
     }
 
     const plan = readPlan(repo.path, issue.identifier);
