@@ -13,7 +13,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const workRoot = join(here, "work");
 
 function parseArgs(argv) {
-  const args = { dryRun: false, configPath: join(here, "handoff.config.json") };
+  const args = { dryRun: false, configPath: join(here, "task-driver.config.json") };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--dry-run") args.dryRun = true;
     else if (argv[i] === "--config") args.configPath = argv[++i];
@@ -30,7 +30,7 @@ async function main() {
   const config = loadConfig(args.configPath);
   const apiKey = getLinearApiKey();
   if (!apiKey) {
-    console.error("handoff: LINEAR_API_KEY not set and ~/.pi/linear.json not found.");
+    console.error("task-driver: LINEAR_API_KEY not set and ~/.pi/linear.json not found.");
     process.exit(1);
   }
 
@@ -48,18 +48,18 @@ async function main() {
 
   const results = await loop(args.dryRun);
   if (args.dryRun) {
-    console.log(`\nhandoff (dry run): ${results.length} issue(s) would be processed.`);
+    console.log(`\ntask-driver (dry run): ${results.length} issue(s) would be processed.`);
     return;
   }
   const count = (o) => results.filter((r) => r.outcome === o).length;
   const prs = count("pr");
   const failed = count("failed");
   const other = results.length - prs - failed;
-  console.log(`\nhandoff complete: ${prs} PR(s), ${failed} failure(s), ${other} skipped/other, ${results.length} total.`);
+  console.log(`\ntask-driver complete: ${prs} PR(s), ${failed} failure(s), ${other} skipped/other, ${results.length} total.`);
   process.exit(failed > 0 ? 1 : 0);
 }
 
 main().catch((err) => {
-  console.error("handoff aborted:", err.message);
+  console.error("task-driver aborted:", err.message);
   process.exit(1);
 });

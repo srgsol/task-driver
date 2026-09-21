@@ -48,7 +48,7 @@ test("validateConfig rejects empty gates", () => {
 
 test("loadConfig resolves repo paths relative to the config file", () => {
   const dir = mkdtempSync(join(tmpdir(), "cfgdir-"));
-  const p = join(dir, "handoff.config.json");
+  const p = join(dir, "task-driver.config.json");
   writeFileSync(p, JSON.stringify({ repos: [{ name: "tiktak", path: "../tiktak", team: "SER", remote: "git@github.com:x/y.git" }] }));
   const c = loadConfig(p);
   assert.equal(c.repos[0].path, resolve(dir, "../tiktak"));

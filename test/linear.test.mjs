@@ -9,7 +9,7 @@ function fakeFetch(handler) {
   };
 }
 
-test("listOpenIssues filters Todo + handoff label", async () => {
+test("listOpenIssues filters Todo + task-driver label", async () => {
   let seen;
   const client = createLinearClient("k", fakeFetch((q, vars) => {
     seen = vars;
@@ -18,7 +18,7 @@ test("listOpenIssues filters Todo + handoff label", async () => {
   const issues = await client.listOpenIssues("SER");
   assert.equal(issues.length, 1);
   assert.deepEqual(seen.filter.state, { name: { eq: "Todo" } });
-  assert.deepEqual(seen.filter.labels, { name: { eq: "handoff" } });
+  assert.deepEqual(seen.filter.labels, { name: { eq: "task-driver" } });
   assert.deepEqual(seen.filter.team, { key: { eq: "SER" } });
 });
 

@@ -37,10 +37,10 @@ test("runAgent streams output to work/<repo>/logs", async () => {
     return { exitCode: 0, timedOut: false, stdout: "hello-log", stderr: "" };
   });
   await executor.runAgent({
-    repoPath: "/r", sessionId: "handoff-tiktak-SER-9", config: { thinking: "medium", timeoutMs: 1000 },
+    repoPath: "/r", sessionId: "task-driver-tiktak-SER-9", config: { thinking: "medium", timeoutMs: 1000 },
     skillPath: "/sk.md", message: "m", workRoot, repoName: "tiktak",
   });
-  const log = readFileSync(join(workRoot, "tiktak", "logs", "handoff-tiktak-SER-9.jsonl"), "utf8");
+  const log = readFileSync(join(workRoot, "tiktak", "logs", "task-driver-tiktak-SER-9.jsonl"), "utf8");
   assert.match(log, /hello-log/);
 });
 

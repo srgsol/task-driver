@@ -1,6 +1,6 @@
-# handoff — Linear → PR automation
+# task-driver — Linear → PR automation
 
-Reads **`Todo` + `handoff`-labeled** Linear issues, drives a headless `pi`
+Reads **`Todo` + `task-driver`-labeled** Linear issues, drives a headless `pi`
 agent per issue (implement → run gates → commit → push), re-verifies
 independently, opens a GitHub PR, and comments the PR link back on the issue.
 A human stays at the merge step.
@@ -19,7 +19,7 @@ Only the controller touches Linear and GitHub. The `pi` agent gets no Linear
 tools and no GitHub token (`--no-extensions`, stripped env).
 
 This is a **standalone, multi-repo application** — it lives in its own repo and
-targets checkouts by path (see `handoff.config.json`). It is not vendored into
+targets checkouts by path (see `task-driver.config.json`). It is not vendored into
 any target repo.
 
 ## Requirements
@@ -30,7 +30,7 @@ any target repo.
   `gh auth login` here. See the global `gh-auth` pi skill
   (`~/.pi/agent/skills/gh-auth/SKILL.md`) for the pattern.
 - **SSH push access** to each target remote (the PAT is only for `gh` API calls).
-- A **`handoff` label** in the Linear team. The controller only picks issues
+- A **`task-driver` label** in the Linear team. The controller only picks issues
   that are `Todo` **and** carry this label.
 - A **clean `master`** checkout in each target repo (see [Rules](#rules)).
 
@@ -39,17 +39,17 @@ any target repo.
 Run from this repo's root:
 
 ```bash
-npm run handoff:dry    # dry run — prints the plan, changes nothing
-npm run handoff        # real run
+npm run task-driver:dry    # dry run — prints the plan, changes nothing
+npm run task-driver        # real run
 npm test               # unit tests (node --test, no dependencies)
 ```
 
-`repos[].path` is resolved relative to `handoff.config.json`, so you can run
+`repos[].path` is resolved relative to `task-driver.config.json`, so you can run
 from any directory.
 
 ## Configuration
 
-`handoff.config.json`:
+`task-driver.config.json`:
 
 ```json
 {
@@ -92,7 +92,7 @@ Per-repo gates example:
 | Base | `master` |
 | Commit | `SER-<num>: <title>` |
 | PR title | the issue title |
-| Session id | `handoff-<repo>-<ISSUE>` |
+| Session id | `task-driver-<repo>-<ISSUE>` |
 
 ## Run artifacts
 
@@ -106,7 +106,7 @@ work/<repo>/plans/<ISSUE>.md          # agent-written implementation plan
 `work/` is gitignored. Watch a run live:
 
 ```bash
-tail -f work/tiktak/logs/handoff-tiktak-SER-15.jsonl | jq .
+tail -f work/tiktak/logs/task-driver-tiktak-SER-15.jsonl | jq .
 ```
 
 The agent's plan path and gate commands are injected into its task message; the
@@ -117,7 +117,7 @@ issue description.
 
 - Each target checkout **must be on a clean `master`**. The controller creates
   each issue's branch from `master` and returns to `master` after every issue.
-- Only `Todo` + `handoff`-labeled issues are picked. Claiming moves them to
+- Only `Todo` + `task-driver`-labeled issues are picked. Claiming moves them to
   `In Progress`, so re-running is safe.
 
 ## Tests
@@ -128,6 +128,6 @@ npm test   # node --test, no dependencies
 
 ## Docs
 
-- `docs/automation/handoff.md` — original foundation and current state
-- `docs/superpowers/specs/2026-09-17-handoff-controller-design.md` — controller design
-- `docs/superpowers/plans/2026-09-17-handoff-controller.md` — original implementation plan
+- `docs/automation/task-driver.md` — original foundation and current state
+- `docs/superpowers/specs/2026-09-17-task-driver-controller-design.md` — controller design
+- `docs/superpowers/plans/2026-09-17-task-driver-controller.md` — original implementation plan

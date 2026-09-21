@@ -4,12 +4,12 @@ import { readPlan as readPlanFromDisk } from "./executor.mjs";
 
 const BASE_BRANCH = "master";
 
-const PLAN_START = "<!-- handoff:plan:start -->";
-const PLAN_END = "<!-- handoff:plan:end -->";
+const PLAN_START = "<!-- task-driver:plan:start -->";
+const PLAN_END = "<!-- task-driver:plan:end -->";
 
 export function upsertPlanSection(description, plan) {
   const current = (description ?? "").trimEnd();
-  const stripped = current.replace(/<!-- handoff:plan:start -->[\s\S]*?<!-- handoff:plan:end -->/g, "").trimEnd();
+  const stripped = current.replace(/<!-- task-driver:plan:start -->[\s\S]*?<!-- task-driver:plan:end -->/g, "").trimEnd();
   const block = `${PLAN_START}\n## Implementation Plan\n\n${plan.trim()}\n${PLAN_END}`;
   return [stripped, block].filter((s) => s.length > 0).join("\n\n");
 }
@@ -43,7 +43,7 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
 
   async function processIssue(repo, issue, dryRun) {
     const branch = branchName(issue.identifier, issue.title);
-    const sessionId = `handoff-${repo.name}-${issue.identifier}`;
+    const sessionId = `task-driver-${repo.name}-${issue.identifier}`;
     const logPath = join(workRoot, repo.name, "logs", `${sessionId}.jsonl`);
     const planPath = join(workRoot, repo.name, "plans", `${issue.identifier}.md`);
 
@@ -57,7 +57,7 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
 
     try {
       await linear.moveState(issue.id, "In Progress");
-      await linear.comment(issue.id, `🤖 handoff: implementing ${issue.identifier} on branch \`${branch}\``);
+      await linear.comment(issue.id, `🤖 task-driver: implementing ${issue.identifier} on branch \`${branch}\``);
     } catch (err) {
       log(`  ⚠️  ${issue.identifier}: claim failed (${err.message}) — skipping`);
       return { identifier: issue.identifier, outcome: "skipped" };
@@ -100,14 +100,14 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
         return { identifier: issue.identifier, outcome: "pr" };
       } catch (err) {
         log(`  ⚠️  ${issue.identifier}: PR create failed: ${err.message}`);
-        await linear.comment(issue.id, `⚠️ handoff: code done and pushed on \`${branch}\`, but PR creation failed: ${err.message}`);
+        await linear.comment(issue.id, `⚠️ task-driver: code done and pushed on \`${branch}\`, but PR creation failed: ${err.message}`);
         git.checkout(repo.path, BASE_BRANCH);
         return { identifier: issue.identifier, outcome: "pr-failed" };
       }
     }
 
     const note = [
-      `❌ handoff could not complete ${issue.identifier} after ${config.attempts} attempt(s).`,
+      `❌ task-driver could not complete ${issue.identifier} after ${config.attempts} attempt(s).`,
       "", "Verification:", gatesSummary(v.gatesResult), "",
       plan ? `Plan:\n${plan}` : "",
     ].filter(Boolean).join("\n");
@@ -132,7 +132,7 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
       }
     }
     const issues = await linear.listOpenIssues(repo.team);
-    log(`${repo.name}: ${issues.length} open handoff issue(s)`);
+    log(`${repo.name}: ${issues.length} open task-driver issue(s)`);
     const results = [];
     for (const issue of issues) results.push(await processIssue(repo, issue, dryRun));
     return results;

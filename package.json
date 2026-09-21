@@ -1,11 +1,11 @@
 {
-  "name": "handoff",
+  "name": "task-driver",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "handoff": "node cli.mjs",
-    "handoff:dry": "node cli.mjs --dry-run",
+    "task-driver": "node cli.mjs",
+    "task-driver:dry": "node cli.mjs --dry-run",
     "test": "node --test \"test/*.test.mjs\""
   }
 }
