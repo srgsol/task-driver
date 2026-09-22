@@ -7,11 +7,14 @@
     "task-driver": "node src/cli.mjs",
     "task-driver:dry": "node src/cli.mjs --dry-run",
     "lint": "eslint .",
-    "test": "node --test \"test/*.test.mjs\""
+    "test": "node --test \"test/*.test.mjs\"",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.4",
     "eslint": "^10.11.0",
-    "globals": "^17.12.0"
+    "globals": "^17.12.0",
+    "typescript": "~5.9.0"
   }
 }

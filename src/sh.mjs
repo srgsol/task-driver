@@ -1,10 +1,20 @@
 import { spawn, spawnSync } from "node:child_process";
 
+/**
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, input?: string }} [opts]
+ */
 export function runSync(cmd, args, { cwd, env, input } = {}) {
   const res = spawnSync(cmd, args, { cwd, env: env ?? process.env, input, encoding: "utf8" });
   return { status: res.status ?? 1, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
 }
 
+/**
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number, onChunk?: (stream: "stdout" | "stderr", text: string) => void }} [opts]
+ */
 export function runAsync(cmd, args, { cwd, env, timeoutMs, onChunk } = {}) {
   return new Promise((resolve) => {
     // stdin MUST be closed ("ignore" -> /dev/null): pi treats an open, non-TTY

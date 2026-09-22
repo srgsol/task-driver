@@ -14,7 +14,7 @@ export function upsertPlanSection(description, plan) {
   return [stripped, block].filter((s) => s.length > 0).join("\n\n");
 }
 
-export function createLoop({ config, skillPath, linear, git, gates, gh, executor, workRoot, readPlan = readPlanFromDisk, log = () => {} }) {
+export function createLoop({ config, skillPath, linear, git, gates, gh, executor, workRoot, readPlan = readPlanFromDisk, log = (/** @type {string} */ _msg) => { void _msg; } }) {
   const gatesList = (repo) => repo.gates.map((g) => `- ${g.cmd} ${g.args.join(" ")}`).join("\n");
   const configBlock = (planPath, repo) =>
     ["## Configuration", `Plan path: ${planPath}`, "Gates (run until all green):", gatesList(repo)].join("\n");
@@ -59,7 +59,8 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
       await linear.moveState(issue.id, "In Progress");
       await linear.comment(issue.id, `🤖 task-driver: implementing ${issue.identifier} on branch \`${branch}\``);
     } catch (err) {
-      log(`  ⚠️  ${issue.identifier}: claim failed (${err.message}) — skipping`);
+      const message = err instanceof Error ? err.message : String(err);
+      log(`  ⚠️  ${issue.identifier}: claim failed (${message}) — skipping`);
       return { identifier: issue.identifier, outcome: "skipped" };
     }
 
@@ -83,7 +84,8 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
       try {
         await linear.updateDescription(issue.id, upsertPlanSection(issue.description, plan));
       } catch (err) {
-        log(`  ⚠️  ${issue.identifier}: could not save plan to issue (${err.message})`);
+        const message = err instanceof Error ? err.message : String(err);
+        log(`  ⚠️  ${issue.identifier}: could not save plan to issue (${message})`);
       }
     } else {
       log(`  ⚠️  ${issue.identifier}: no implementation plan produced — skipping issue write-back`);
@@ -99,8 +101,9 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
         git.checkout(repo.path, BASE_BRANCH);
         return { identifier: issue.identifier, outcome: "pr" };
       } catch (err) {
-        log(`  ⚠️  ${issue.identifier}: PR create failed: ${err.message}`);
-        await linear.comment(issue.id, `⚠️ task-driver: code done and pushed on \`${branch}\`, but PR creation failed: ${err.message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        log(`  ⚠️  ${issue.identifier}: PR create failed: ${message}`);
+        await linear.comment(issue.id, `⚠️ task-driver: code done and pushed on \`${branch}\`, but PR creation failed: ${message}`);
         git.checkout(repo.path, BASE_BRANCH);
         return { identifier: issue.identifier, outcome: "pr-failed" };
       }
