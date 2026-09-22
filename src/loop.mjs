@@ -131,8 +131,8 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
         return [];
       }
     }
-    const issues = await linear.listOpenIssues(repo.team);
-    log(`${repo.name}: ${issues.length} open task-driver issue(s)`);
+    const issues = await linear.listOpenIssues(repo.team, repo.project);
+    log(`${repo.name} (project ${repo.project}): ${issues.length} open task-driver issue(s)`);
     const results = [];
     for (const issue of issues) results.push(await processIssue(repo, issue, dryRun));
     return results;

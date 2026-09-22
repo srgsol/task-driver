@@ -30,8 +30,9 @@ any target repo.
   `gh auth login` here. See the global `gh-auth` pi skill
   (`~/.pi/agent/skills/gh-auth/SKILL.md`) for the pattern.
 - **SSH push access** to each target remote (the PAT is only for `gh` API calls).
-- A **`task-driver` label** in the Linear team. The controller only picks issues
-  that are `Todo` **and** carry this label.
+- A **`task-driver` label** in the Linear team, and a **Linear project per repo**
+  (see [Configuration](#configuration)). The controller only picks issues that
+  are `Todo`, carry this label, **and** live in the repo's configured project.
 - A **clean `master`** checkout in each target repo (see [Rules](#rules)).
 
 ## Usage
@@ -66,7 +67,7 @@ package.json
 ```json
 {
   "repos": [
-    { "name": "tiktak", "path": "../tiktak", "team": "SER", "remote": "git@github.com:srgsol/tiktak.git" }
+    { "name": "tiktak", "path": "../tiktak", "team": "SER", "project": "tik-tak", "remote": "git@github.com:srgsol/tiktak.git" }
   ],
   "attempts": 2,
   "timeoutMs": 900000,
@@ -79,6 +80,7 @@ package.json
 | `repos[].name` | Label used in session ids, log names, and messages |
 | `repos[].path` | Checkout location, relative to this config file |
 | `repos[].team` | Linear team key to poll |
+| `repos[].project` | Linear project name to poll (exact match). Each repo routes only issues in this project. |
 | `repos[].remote` | Informational (push uses the checkout's own remote) |
 | `repos[].gates` | Optional; the full list to run. When omitted, `DEFAULT_GATES` applies: `npm test`, `npx tsc --noEmit`, `npm run lint`. When present, it **replaces** the defaults entirely — list every gate you want, including `test`, since there is no merge. See [Gates](#gates). |
 | `attempts` | Max `pi` runs per issue (1 = no repair pass) |
@@ -101,7 +103,7 @@ lacks TypeScript or a `lint` script, omit the defaults and list every gate it
 actually has:
 
 ```json
-{ "name": "task-driver", "path": ".", "team": "SER", "remote": "git@github.com:srgsol/task-driver.git",
+{ "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
   "gates": [
     { "name": "test", "cmd": "npm", "args": ["test"] }
   ] }
@@ -121,15 +123,17 @@ To bring a new repository under the controller, do the following:
    gitignored `.env` (injected per `gh` command as `GH_TOKEN`), plus SSH push
    access to its remote. Never run `gh auth login`. See the global `gh-auth`
    skill.
-4. **Linear label** — the `task-driver` label must exist in the repo's Linear
-   team (the controller only picks `Todo` + `task-driver`-labeled issues).
+4. **Linear label + project** — the `task-driver` label must exist in the repo's
+   Linear team, and the repo's issues must live in a dedicated Linear project
+   (the controller only picks `Todo` + `task-driver`-labeled issues **in that
+   project**).
 5. **Add an entry** to `repos` in `task-driver.config.json`. `path` is resolved
    relative to this config file. Set `gates` only if the repo's gates differ
    from the defaults — and when you do, list *every* gate the repo has, since
    `gates` replaces `DEFAULT_GATES` (see [Gates](#gates)):
 
 ```json
-{ "name": "<repo>", "path": "../<repo>", "team": "SER", "remote": "git@github.com:srgsol/<repo>.git" }
+{ "name": "<repo>", "path": "../<repo>", "team": "SER", "project": "<project>", "remote": "git@github.com:srgsol/<repo>.git" }
 ```
 
 6. **Verify** with a dry run, which lists the plan without changing anything:
@@ -175,8 +179,8 @@ issue description.
 
 - Each target checkout **must be on a clean `master`**. The controller creates
   each issue's branch from `master` and returns to `master` after every issue.
-- Only `Todo` + `task-driver`-labeled issues are picked. Claiming moves them to
-  `In Progress`, so re-running is safe.
+- Only `Todo` + `task-driver`-labeled issues in the repo's configured project are
+  picked. Claiming moves them to `In Progress`, so re-running is safe.
 
 ## Tests
 

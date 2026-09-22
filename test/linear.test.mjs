@@ -9,17 +9,18 @@ function fakeFetch(handler) {
   };
 }
 
-test("listOpenIssues filters Todo + task-driver label", async () => {
+test("listOpenIssues filters Todo + task-driver label + project", async () => {
   let seen;
   const client = createLinearClient("k", fakeFetch((q, vars) => {
     seen = vars;
     return { issues: { nodes: [{ id: "i1", identifier: "SER-9", title: "t", description: null, url: "u" }] } };
   }));
-  const issues = await client.listOpenIssues("SER");
+  const issues = await client.listOpenIssues("SER", "tik-tak");
   assert.equal(issues.length, 1);
   assert.deepEqual(seen.filter.state, { name: { eq: "Todo" } });
   assert.deepEqual(seen.filter.labels, { name: { eq: "task-driver" } });
   assert.deepEqual(seen.filter.team, { key: { eq: "SER" } });
+  assert.deepEqual(seen.filter.project, { name: { eq: "tik-tak" } });
 });
 
 test("moveState resolves state id then updates", async () => {

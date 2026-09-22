@@ -1,7 +1,7 @@
 {
   "repos": [
-    { "name": "tiktak", "path": "../tiktak", "team": "SER", "remote": "git@github.com:srgsol/tiktak.git" },
-    { "name": "task-driver", "path": ".", "team": "SER", "remote": "git@github.com:srgsol/task-driver.git",
+    { "name": "tiktak", "path": "../tiktak", "team": "SER", "project": "tik-tak", "remote": "git@github.com:srgsol/tiktak.git" },
+    { "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
       "gates": [
         { "name": "test", "cmd": "npm", "args": ["test"] }
       ] }

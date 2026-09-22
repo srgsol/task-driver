@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createLoop, upsertPlanSection } from "../src/loop.mjs";
 
 function makeDeps(opts = {}) {
-  const calls = { moveState: [], comments: [], updateDescription: [], checkout: [], createBranch: [], runAgent: [], createPR: [], pushBranch: [] };
+  const calls = { listOpenIssues: [], moveState: [], comments: [], updateDescription: [], checkout: [], createBranch: [], runAgent: [], createPR: [], pushBranch: [] };
   const agentResults = opts.agentResults ?? [{ exitCode: 0, timedOut: false, stdout: "", stderr: "" }];
   let agentCall = 0;
   const git = {
@@ -17,7 +17,7 @@ function makeDeps(opts = {}) {
   };
   const gates = { runGates: () => ({ green: true, results: [{ name: "test", passed: true, output: "" }] }), ...opts.gates };
   const linear = {
-    listOpenIssues: async () => opts.issues ?? [{ id: "i1", identifier: "SER-9", title: "Fix drag", description: "desc", url: "u" }],
+    listOpenIssues: async (...args) => { calls.listOpenIssues = args; return opts.issues ?? [{ id: "i1", identifier: "SER-9", title: "Fix drag", description: "desc", url: "u" }]; },
     moveState: async (id, s) => calls.moveState.push([id, s]),
     comment: async (id, b) => calls.comments.push([id, b]),
     updateDescription: async (id, d) => calls.updateDescription.push([id, d]),
@@ -25,7 +25,7 @@ function makeDeps(opts = {}) {
   };
   const gh = { createPR: (a) => { calls.createPR.push(a); return { url: "https://x/pull/1", number: 1 }; }, ...opts.gh };
   const executor = { runAgent: async (a) => { calls.runAgent.push(a); return agentResults[Math.min(agentCall++, agentResults.length - 1)]; } };
-  const config = { repos: [{ name: "tiktak", path: "/r", team: "SER", remote: "g", gates: [
+  const config = { repos: [{ name: "tiktak", path: "/r", team: "SER", project: "tik-tak", remote: "g", gates: [
     { name: "test", cmd: "npm", args: ["test"] },
     { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },
     { name: "lint", cmd: "npm", args: ["run", "lint"] },
@@ -44,6 +44,12 @@ test("happy path: claim, branch, PR, comment, back to master", async () => {
   assert.equal(calls.createPR[0].head, "SER-9-fix-drag");
   assert.match(calls.comments[1][1], /PR opened/);
   assert.equal(calls.checkout.length, 2);
+});
+
+test("processRepo passes repo.project to listOpenIssues", async () => {
+  const { loop, calls } = makeDeps();
+  await loop(false);
+  assert.deepEqual(calls.listOpenIssues, ["SER", "tik-tak"]);
 });
 
 test("PR body links to the Linear issue", async () => {

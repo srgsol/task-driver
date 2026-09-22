@@ -14,14 +14,14 @@ export function validateConfig(raw) {
     throw new Error("config.repos must be a non-empty array");
   }
   const repos = raw.repos.map((r, i) => {
-    if (!r.name || !r.path || !r.team || !r.remote) {
-      throw new Error(`config.repos[${i}] must define name, path, team, remote`);
+    if (!r.name || !r.path || !r.team || !r.project || !r.remote) {
+      throw new Error(`config.repos[${i}] must define name, path, team, project, remote`);
     }
     const gates = r.gates ?? DEFAULT_GATES;
     if (!Array.isArray(gates) || gates.length === 0) {
       throw new Error(`config.repos[${i}].gates must be a non-empty array`);
     }
-    return { name: r.name, path: r.path, team: r.team, remote: r.remote, gates };
+    return { name: r.name, path: r.path, team: r.team, project: r.project, remote: r.remote, gates };
   });
   const attempts = raw.attempts ?? DEFAULTS.attempts;
   const timeoutMs = raw.timeoutMs ?? DEFAULTS.timeoutMs;

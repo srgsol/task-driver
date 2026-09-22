@@ -37,10 +37,10 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
   }
 
   return {
-    async listOpenIssues(teamKey) {
+    async listOpenIssues(teamKey, projectName) {
       const data = await gql(
         `query($filter: IssueFilter) { issues(filter: $filter, first: 100) { nodes { id identifier title description url } } }`,
-        { filter: { team: { key: { eq: teamKey } }, state: { name: { eq: "Todo" } }, labels: { name: { eq: "task-driver" } } } },
+        { filter: { team: { key: { eq: teamKey } }, project: { name: { eq: projectName } }, state: { name: { eq: "Todo" } }, labels: { name: { eq: "task-driver" } } } },
       );
       return data.issues.nodes;
     },
