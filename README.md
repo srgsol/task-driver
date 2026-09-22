@@ -43,6 +43,8 @@ Run from this repo's root:
 npm run task-driver:dry    # dry run — prints the plan, changes nothing
 npm run task-driver        # real run
 npm test               # unit tests (node --test, no dependencies)
+npm run typecheck
+npm run lint
 ```
 
 `repos[].path` is resolved relative to `task-driver.config.json`, so you can run
@@ -57,6 +59,7 @@ docs/                     # design and handoff docs
 work/                     # per-run logs and plans (gitignored)
 task-driver.config.json   # repo + gate configuration
 eslint.config.js          # ESLint flat config for the `lint` gate
+tsconfig.json             # checkJs typecheck for the `tsc` gate (src/**/*.mjs)
 implement.md              # agent skill/prompt injected into pi runs
 package.json
 ```
@@ -96,12 +99,16 @@ package.json
 ### Gates
 
 Every repo must declare its gates explicitly in `task-driver.config.json`.
-There is no default set — list every gate the repo has, including `test`:
+
+There is no global default gate set. The lean recommendation for repos that
+want a solid minimum is `test` · `tsc` · `lint`, but each repo lists exactly
+what the controller should run.
 
 ```json
 { "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
   "gates": [
     { "name": "test", "cmd": "npm", "args": ["test"] },
+    { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
     { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
   ] }
 ```
