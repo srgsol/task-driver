@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { loadConfig, validateConfig, DEFAULTS, DEFAULT_GATES } from "../src/config.mjs";
+import { loadConfig, validateConfig, DEFAULTS } from "../src/config.mjs";
+
+const gates = [{ name: "test", cmd: "npm", args: ["test"] }];
 
 const repo = (overrides = {}) => ({
   name: "tiktak",
@@ -11,6 +13,7 @@ const repo = (overrides = {}) => ({
   team: "SER",
   project: "tik-tak",
   remote: "git@github.com:x/y.git",
+  gates,
   ...overrides,
 });
 
@@ -43,9 +46,11 @@ test("loadConfig reads and validates a file", () => {
   assert.equal(c.repos[0].project, "tik-tak");
 });
 
-test("validateConfig attaches default gates when omitted", () => {
-  const c = validateConfig({ repos: [repo()] });
-  assert.equal(c.repos[0].gates, DEFAULT_GATES);
+test("validateConfig rejects omitted gates", () => {
+  assert.throws(
+    () => validateConfig({ repos: [repo({ gates: undefined })] }),
+    /gates must be a non-empty array/,
+  );
 });
 
 test("validateConfig keeps explicit gates", () => {
