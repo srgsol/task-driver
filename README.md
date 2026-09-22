@@ -67,7 +67,12 @@ package.json
 ```json
 {
   "repos": [
-    { "name": "tiktak", "path": "../tiktak", "team": "SER", "project": "tik-tak", "remote": "git@github.com:srgsol/tiktak.git" }
+    { "name": "tiktak", "path": "../tiktak", "team": "SER", "project": "tik-tak", "remote": "git@github.com:srgsol/tiktak.git",
+      "gates": [
+        { "name": "test", "cmd": "npm", "args": ["test"] },
+        { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
+        { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
+      ] }
   ],
   "attempts": 2,
   "timeoutMs": 900000,
@@ -82,25 +87,15 @@ package.json
 | `repos[].team` | Linear team key to poll |
 | `repos[].project` | Linear project name to poll (exact match). Each repo routes only issues in this project. |
 | `repos[].remote` | Informational (push uses the checkout's own remote) |
-| `repos[].gates` | Optional; the full list to run. When omitted, `DEFAULT_GATES` applies: `npm test`, `npx tsc --noEmit`, `npm run lint`. When present, it **replaces** the defaults entirely — list every gate you want, including `test`, since there is no merge. See [Gates](#gates). |
+| `repos[].gates` | Required; the full list of gates to run. List every gate the repo has, including `test`, since there is no default set. See [Gates](#gates). |
 | `attempts` | Max `pi` runs per issue (1 = no repair pass) |
 | `timeoutMs` | Wall-clock cap per `pi` run (`900000` = 15 min) |
 | `thinking` | `pi --thinking` level (`off`…`max`) |
 
 ### Gates
 
-When a repo omits `gates`, a default set is applied (defined as `DEFAULT_GATES`
-in `src/config.mjs`):
-
-| Name | Command |
-|---|---|
-| `test` | `npm test` |
-| `tsc` | `npx tsc --noEmit` |
-| `lint` | `npm run lint` |
-
-**Providing `gates` replaces the defaults, it does not extend them.** If a repo
-lacks TypeScript or a `lint` script, omit the defaults and list every gate it
-actually has:
+Every repo must declare its gates explicitly in `task-driver.config.json`.
+There is no default set — list every gate the repo has, including `test`:
 
 ```json
 { "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
@@ -109,7 +104,16 @@ actually has:
   ] }
 ```
 
-A repo that wants the default three plus an extra one lists all four explicitly.
+Each gate is a command the controller re-runs until all are green before
+opening a PR. A repo that also typechecks and lints lists those too:
+
+```json
+"gates": [
+  { "name": "test", "cmd": "npm", "args": ["test"] },
+  { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
+  { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
+]
+```
 
 ## Adding a repository
 
@@ -128,12 +132,14 @@ To bring a new repository under the controller, do the following:
    (the controller only picks `Todo` + `task-driver`-labeled issues **in that
    project**).
 5. **Add an entry** to `repos` in `task-driver.config.json`. `path` is resolved
-   relative to this config file. Set `gates` only if the repo's gates differ
-   from the defaults — and when you do, list *every* gate the repo has, since
-   `gates` replaces `DEFAULT_GATES` (see [Gates](#gates)):
+   relative to this config file. Declare every gate the repo has in `gates`
+   (there is no default set — see [Gates](#gates)):
 
 ```json
-{ "name": "<repo>", "path": "../<repo>", "team": "SER", "project": "<project>", "remote": "git@github.com:srgsol/<repo>.git" }
+{ "name": "<repo>", "path": "../<repo>", "team": "SER", "project": "<project>", "remote": "git@github.com:srgsol/<repo>.git",
+  "gates": [
+    { "name": "test", "cmd": "npm", "args": ["test"] }
+  ] }
 ```
 
 6. **Verify** with a dry run, which lists the plan without changing anything:
