@@ -75,10 +75,15 @@ test("loadConfig resolves repo paths relative to the config file", () => {
   assert.equal(c.repos[0].path, resolve(dir, "../tiktak"));
 });
 
-test("task-driver repo declares both test and lint gates", () => {
+test("task-driver repo declares test, tsc, and lint gates", () => {
   const p = fileURLToPath(new URL("../task-driver.config.json", import.meta.url));
   const c = loadConfig(p);
   const td = c.repos.find((r) => r.name === "task-driver");
   assert.ok(td, "task-driver repo is configured");
-  assert.deepEqual(td.gates.map((g) => g.name), ["test", "lint"]);
+  assert.deepEqual(td.gates.map((g) => g.name), ["test", "tsc", "lint"]);
+  assert.deepEqual(td.gates, [
+    { name: "test", cmd: "npm", args: ["test"] },
+    { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },
+    { name: "lint", cmd: "npm", args: ["run", "lint"] },
+  ]);
 });

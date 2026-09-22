@@ -9,6 +9,7 @@
     { "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
       "gates": [
         { "name": "test", "cmd": "npm", "args": ["test"] },
+        { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
         { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
       ] }
   ],
