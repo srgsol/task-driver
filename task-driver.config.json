@@ -8,7 +8,8 @@
       ] },
     { "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
       "gates": [
-        { "name": "test", "cmd": "npm", "args": ["test"] }
+        { "name": "test", "cmd": "npm", "args": ["test"] },
+        { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
       ] }
   ],
   "attempts": 2,

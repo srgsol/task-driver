@@ -56,6 +56,7 @@ test/                     # unit tests (node --test, no dependencies)
 docs/                     # design and handoff docs
 work/                     # per-run logs and plans (gitignored)
 task-driver.config.json   # repo + gate configuration
+eslint.config.js          # ESLint flat config for the `lint` gate
 implement.md              # agent skill/prompt injected into pi runs
 package.json
 ```
@@ -100,7 +101,8 @@ There is no default set — list every gate the repo has, including `test`:
 ```json
 { "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
   "gates": [
-    { "name": "test", "cmd": "npm", "args": ["test"] }
+    { "name": "test", "cmd": "npm", "args": ["test"] },
+    { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
   ] }
 ```
 
@@ -191,7 +193,8 @@ issue description.
 ## Tests
 
 ```bash
-npm test   # node --test, no dependencies
+npm test        # unit tests (node --test)
+npm run lint    # ESLint (flat config)
 ```
 
 ## Docs

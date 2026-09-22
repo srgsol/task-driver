@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadConfig, validateConfig, DEFAULTS } from "../src/config.mjs";
 
 const gates = [{ name: "test", cmd: "npm", args: ["test"] }];
@@ -72,4 +73,12 @@ test("loadConfig resolves repo paths relative to the config file", () => {
   writeFileSync(p, JSON.stringify({ repos: [repo({ path: "../tiktak" })] }));
   const c = loadConfig(p);
   assert.equal(c.repos[0].path, resolve(dir, "../tiktak"));
+});
+
+test("task-driver repo declares both test and lint gates", () => {
+  const p = fileURLToPath(new URL("../task-driver.config.json", import.meta.url));
+  const c = loadConfig(p);
+  const td = c.repos.find((r) => r.name === "task-driver");
+  assert.ok(td, "task-driver repo is configured");
+  assert.deepEqual(td.gates.map((g) => g.name), ["test", "lint"]);
 });

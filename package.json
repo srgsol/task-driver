@@ -6,6 +6,12 @@
   "scripts": {
     "task-driver": "node src/cli.mjs",
     "task-driver:dry": "node src/cli.mjs --dry-run",
+    "lint": "eslint .",
     "test": "node --test \"test/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0"
   }
 }
