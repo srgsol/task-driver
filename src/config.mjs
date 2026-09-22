@@ -1,8 +1,24 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
+/**
+ * Config loading and validation for `task-driver.config.json`.
+ */
+
+/** Defaults applied when the config file omits top-level tunables. */
 export const DEFAULTS = { attempts: 2, timeoutMs: 900000, thinking: "medium" };
 
+/**
+ * @typedef {{ name: string, cmd: string, args: string[] }} GateConfig
+ * @typedef {{ name: string, path: string, team: string, project: string, remote: string, gates: GateConfig[] }} RepoConfig
+ * @typedef {{ repos: RepoConfig[], attempts: number, timeoutMs: number, thinking: string }} Config
+ */
+
+/**
+ * Validate and normalize the raw parsed config JSON.
+ * @param {any} raw
+ * @returns {Config}
+ */
 export function validateConfig(raw) {
   if (!raw || typeof raw !== "object") throw new Error("config must be an object");
   if (!Array.isArray(raw.repos) || raw.repos.length === 0) {
@@ -25,6 +41,11 @@ export function validateConfig(raw) {
   return { repos, attempts, timeoutMs, thinking };
 }
 
+/**
+ * Read, validate, and resolve a config file from disk.
+ * @param {string} path
+ * @returns {Config}
+ */
 export function loadConfig(path) {
   const config = validateConfig(JSON.parse(readFileSync(path, "utf8")));
   const base = dirname(path);

@@ -1,6 +1,20 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+/**
+ * GitHub helpers: reads a per-repo token and opens pull requests via `gh`.
+ */
+
+/**
+ * @typedef {{ url: string, number: number }} PrResult
+ * @typedef {(cmd: string, args: string[], opts?: { cwd?: string, env?: NodeJS.ProcessEnv, input?: string }) => { status: number, stdout: string, stderr: string }} RunSync
+ */
+
+/**
+ * Read the GitHub token from a repository's `.env` file.
+ * @param {string} repoPath
+ * @returns {string}
+ */
 export function getGhToken(repoPath) {
   const envPath = join(repoPath, ".env");
   let text;
@@ -14,8 +28,18 @@ export function getGhToken(repoPath) {
   return m[1].trim().replace(/\r$/, "");
 }
 
+/**
+ * Build a `gh pr create` runner bound to a `runSync` implementation.
+ * @param {RunSync} runSync
+ * @returns {{ createPR(opts: { repoPath: string, base: string, head: string, title: string, body: string }): PrResult }}
+ */
 export function createGh(runSync) {
   return {
+    /**
+     * Create a GitHub pull request and parse the new PR URL from `gh` output.
+     * @param {{ repoPath: string, base: string, head: string, title: string, body: string }} opts
+     * @returns {PrResult}
+     */
     createPR({ repoPath, base, head, title, body }) {
       const token = getGhToken(repoPath);
       const r = runSync("gh", [
