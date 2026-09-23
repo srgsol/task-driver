@@ -61,7 +61,7 @@ export function createExecutor(runAsync) {
         appendFileSync(logPath, `\n===== ${new Date().toISOString()} =====\n`);
       } catch { logPath = undefined; }
       const onChunk = logPath
-        ? (_stream, text) => { try { appendFileSync(logPath, text); } catch { /* ignore */ } }
+        ? (/** @type {"stdout" | "stderr"} */ _stream, /** @type {string} */ text) => { try { appendFileSync(logPath, text); } catch { /* ignore */ } }
         : undefined;
 
       return runAsync("pi", args, { cwd: repoPath, env: childEnv(), timeoutMs: config.timeoutMs, onChunk });

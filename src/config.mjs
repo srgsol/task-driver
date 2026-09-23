@@ -24,7 +24,7 @@ export function validateConfig(raw) {
   if (!Array.isArray(raw.repos) || raw.repos.length === 0) {
     throw new Error("config.repos must be a non-empty array");
   }
-  const repos = raw.repos.map((r, i) => {
+  const repos = raw.repos.map((/** @type {RepoConfig} */ r, /** @type {number} */ i) => {
     if (!r.name || !r.path || !r.team || !r.project || !r.remote) {
       throw new Error(`config.repos[${i}] must define name, path, team, project, remote`);
     }

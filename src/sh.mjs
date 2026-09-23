@@ -44,13 +44,14 @@ export function runAsync(cmd, args, { cwd, env, timeoutMs, onChunk } = {}) {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    /** @type {NodeJS.Timeout | undefined} */
     let timer;
     child.stdout.on("data", (d) => { stdout += d; if (onChunk) onChunk("stdout", String(d)); });
     child.stderr.on("data", (d) => { stderr += d; if (onChunk) onChunk("stderr", String(d)); });
     if (timeoutMs) {
       timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
     }
-    const done = (res) => { if (timer) clearTimeout(timer); resolve(res); };
+    const done = (/** @type {AsyncRunResult} */ res) => { if (timer) clearTimeout(timer); resolve(res); };
     child.on("close", (code) => done({ exitCode: code, timedOut, stdout, stderr }));
     child.on("error", (err) => done({ exitCode: null, timedOut, stdout, stderr: `${stderr}${err}` }));
   });

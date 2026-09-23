@@ -25,6 +25,7 @@ const API_URL = "https://api.linear.app/graphql";
  * @property {(issueId: string, body: string) => Promise<void>} comment
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
  * @property {(issueId: string, description: string) => Promise<void>} updateDescription
+ * @property {(input: { teamId: string, projectId: string, title: string, description: string }) => Promise<LinearIssue>} createIssue
  */
 
 /**
@@ -69,7 +70,7 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
       throw new Error(`Linear API returned non-JSON (HTTP ${res.status})`);
     }
     if (res.status !== 200 || json.errors?.length) {
-      const msgs = (json.errors ?? []).map((e) => e.message).join("; ");
+      const msgs = (json.errors ?? []).map((/** @type {{ message: string }} */ e) => e.message).join("; ");
       throw new Error(`Linear API error (HTTP ${res.status}): ${msgs || "unknown"}`);
     }
     return json.data;
@@ -100,6 +101,10 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
       if (!data.issue) throw new Error(`Issue "${identifier}" not found`);
       return data.issue;
     },
+    /**
+     * @param {{ teamId: string, projectId: string, title: string, description: string }} input
+     * @returns {Promise<LinearIssue>}
+     */
     async createIssue({ teamId, projectId, title, description }) {
       const data = await gql(
         `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier title url } } }`,
@@ -137,7 +142,7 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
         { id: teamId },
       );
       const state = (states.team?.states?.nodes ?? []).find(
-        (s) => s.name.toLowerCase() === stateName.toLowerCase(),
+        (/** @type {{ name: string }} */ s) => s.name.toLowerCase() === stateName.toLowerCase(),
       );
       if (!state) throw new Error(`State "${stateName}" not found`);
       const data = await gql(

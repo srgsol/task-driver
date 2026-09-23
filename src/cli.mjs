@@ -67,7 +67,7 @@ async function main() {
     console.log(`\ntask-driver (dry run): ${results.length} issue(s) would be processed.`);
     return;
   }
-  const count = (o) => results.filter((r) => r.outcome === o).length;
+  const count = (/** @type {string} */ o) => results.filter((r) => r.outcome === o).length;
   const prs = count("pr");
   const failed = count("failed");
   const other = results.length - prs - failed;

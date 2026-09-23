@@ -43,6 +43,11 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  * @typedef {object} GatesRun
  * @property {boolean} green
  * @property {GateResult[]} results
+ * @typedef {object} RunResult
+ * @property {number | null} exitCode
+ * @property {boolean} timedOut
+ * @property {string} stdout
+ * @property {string} stderr
  * @typedef {object} LinearClient
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
  * @property {(issueId: string, body: string) => Promise<void>} comment
@@ -60,7 +65,7 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  * @typedef {object} Gh
  * @property {(opts: { repoPath: string, base: string, head: string, title: string, body: string }) => { url: string, number: number }} createPR
  * @typedef {object} Executor
- * @property {(opts: { repoPath: string, sessionId: string, config: Config, skillPath: string, message: string, workRoot: string, repoName: string }) => Promise<{ exitCode: number | null, timedOut: boolean, stdout: string, stderr: string }>} runAgent
+ * @property {(opts: { repoPath: string, sessionId: string, config: Config, skillPath: string, message: string, workRoot: string, repoName: string }) => Promise<RunResult>} runAgent
  * @typedef {object} LoopDeps
  * @property {Config} config
  * @property {string} skillPath
@@ -93,14 +98,14 @@ export function upsertPlanSection(description, plan) {
  * @returns {(dryRun: boolean) => Promise<{ identifier: string, outcome: string }[]>}
  */
 export function createLoop({ config, skillPath, linear, git, gates, gh, executor, workRoot, readPlan = readPlanFromDisk, log = (/** @type {string} */ _msg) => { void _msg; } }) {
-  const gatesList = (repo) => repo.gates.map((g) => `- ${g.cmd} ${g.args.join(" ")}`).join("\n");
-  const configBlock = (planPath, repo) =>
+  const gatesList = (/** @type {RepoConfig} */ repo) => repo.gates.map((/** @type {GateConfig} */ g) => `- ${g.cmd} ${g.args.join(" ")}`).join("\n");
+  const configBlock = (/** @type {string} */ planPath, /** @type {RepoConfig} */ repo) =>
     ["## Configuration", `Plan path: ${planPath}`, "Gates (run until all green):", gatesList(repo)].join("\n");
 
-  const issuePrompt = (issue, branch, planPath, repo) =>
+  const issuePrompt = (/** @type {Issue} */ issue, /** @type {string} */ branch, /** @type {string} */ planPath, /** @type {RepoConfig} */ repo) =>
     [`Implement ${issue.identifier}: ${issue.title}`, "", issue.description || "(no description)", "", `Branch: ${branch}`, "", configBlock(planPath, repo)].join("\n");
 
-  const repairPrompt = (issue, branch, result, planPath, repo) => {
+  const repairPrompt = (/** @type {Issue} */ issue, /** @type {string} */ branch, /** @type {RunResult} */ result, /** @type {string} */ planPath, /** @type {RepoConfig} */ repo) => {
     // Keep the repair prompt bounded: the agent only needs the tail of the output.
     const tail = `${result.stdout}\n${result.stderr}`.slice(-4000);
     return [
@@ -111,9 +116,14 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
     ].join("\n");
   };
 
-  const gatesSummary = (r) => r.results.map((x) => `- \`${x.name}\`: ${x.passed ? "passed" : "FAILED"}`).join("\n");
+  const gatesSummary = (/** @type {GatesRun} */ r) => r.results.map((/** @type {GateResult} */ x) => `- \`${x.name}\`: ${x.passed ? "passed" : "FAILED"}`).join("\n");
 
   // Re-check independently of the agent: exit code, branch pushed, gates green.
+  /**
+   * @param {RepoConfig} repo
+   * @param {string} branch
+   * @param {RunResult} result
+   */
   function verify(repo, branch, result) {
     let pushed = false;
     try { pushed = git.branchPushed(repo.path, branch); } catch { /* ignore */ }
@@ -121,6 +131,11 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
     return { ok: result.exitCode === 0 && !result.timedOut && pushed && gatesResult.green, pushed, gatesResult };
   }
 
+  /**
+   * @param {RepoConfig} repo
+   * @param {Issue} issue
+   * @param {boolean} dryRun
+   */
   async function processIssue(repo, issue, dryRun) {
     const branch = branchName(issue.identifier, issue.title);
     const sessionId = `task-driver-${repo.name}-${issue.identifier}`;
@@ -203,6 +218,10 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
     return { identifier: issue.identifier, outcome: "failed" };
   }
 
+  /**
+   * @param {RepoConfig} repo
+   * @param {boolean} dryRun
+   */
   async function processRepo(repo, dryRun) {
     if (!dryRun) {
       // Preflight: a dirty tree or a non-master checkout would derail the run.
