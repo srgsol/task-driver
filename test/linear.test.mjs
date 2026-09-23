@@ -52,6 +52,29 @@ test("updateDescription posts the description", async () => {
   assert.equal(seen.input.stateId, undefined);
 });
 
+test("createIssue posts input and returns the created issue", async () => {
+  let seen;
+  const client = createLinearClient("k", fakeFetch((q, v) => {
+    seen = v;
+    return { issueCreate: { success: true, issue: { id: "i2", identifier: "SER-30", title: "Add createIssue", url: "u" } } };
+  }));
+  const issue = await client.createIssue({ teamId: "team-1", projectId: "proj-1", title: "Add createIssue", description: "desc" });
+  assert.equal(seen.input.teamId, "team-1");
+  assert.equal(seen.input.projectId, "proj-1");
+  assert.equal(seen.input.title, "Add createIssue");
+  assert.equal(seen.input.description, "desc");
+  assert.equal(issue.identifier, "SER-30");
+  assert.equal(issue.id, "i2");
+});
+
+test("createIssue throws when issueCreate is not successful", async () => {
+  const client = createLinearClient("k", fakeFetch(() => ({ issueCreate: { success: false } })));
+  await assert.rejects(
+    () => client.createIssue({ teamId: "t", projectId: "p", title: "x", description: "" }),
+    /Failed to create issue/,
+  );
+});
+
 test("throws on API error", async () => {
   const client = createLinearClient("k", async () => ({ status: 200, text: async () => JSON.stringify({ errors: [{ message: "boom" }] }) }));
   await assert.rejects(() => client.getIssue("SER-9"), /boom/);

@@ -52,6 +52,14 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
       if (!data.issue) throw new Error(`Issue "${identifier}" not found`);
       return data.issue;
     },
+    async createIssue({ teamId, projectId, title, description }) {
+      const data = await gql(
+        `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier title url } } }`,
+        { input: { teamId, projectId, title, description } },
+      );
+      if (!data.issueCreate?.success) throw new Error("Failed to create issue");
+      return data.issueCreate.issue;
+    },
     async comment(issueId, body) {
       const data = await gql(
         `mutation($input: CommentCreateInput!) { commentCreate(input: $input) { success } }`,
