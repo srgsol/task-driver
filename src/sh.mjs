@@ -1,9 +1,24 @@
 import { spawn, spawnSync } from "node:child_process";
 
 /**
+ * Child-process helpers. `runSync` is used for quick verification commands
+ * (gates, git, gh); `runAsync` is used for the long-running, streaming `pi`
+ * agent process.
+ */
+
+/**
+ * @typedef {{ status: number, stdout: string, stderr: string }} SyncRunResult
+ * @typedef {{ cwd?: string, env?: NodeJS.ProcessEnv, input?: string }} SyncRunOptions
+ * @typedef {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number, onChunk?: (stream: "stdout" | "stderr", text: string) => void }} AsyncRunOptions
+ * @typedef {{ exitCode: number | null, timedOut: boolean, stdout: string, stderr: string }} AsyncRunResult
+ */
+
+/**
+ * Run a command synchronously and capture its status and output.
  * @param {string} cmd
  * @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, input?: string }} [opts]
+ * @param {SyncRunOptions} [opts]
+ * @returns {SyncRunResult}
  */
 export function runSync(cmd, args, { cwd, env, input } = {}) {
   const res = spawnSync(cmd, args, { cwd, env: env ?? process.env, input, encoding: "utf8" });
@@ -11,9 +26,11 @@ export function runSync(cmd, args, { cwd, env, input } = {}) {
 }
 
 /**
+ * Run a command asynchronously, streaming stdout/stderr and enforcing a timeout.
  * @param {string} cmd
  * @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number, onChunk?: (stream: "stdout" | "stderr", text: string) => void }} [opts]
+ * @param {AsyncRunOptions} [opts]
+ * @returns {Promise<AsyncRunResult>}
  */
 export function runAsync(cmd, args, { cwd, env, timeoutMs, onChunk } = {}) {
   return new Promise((resolve) => {

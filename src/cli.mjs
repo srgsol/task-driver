@@ -9,10 +9,21 @@ import { createExecutor } from "./executor.mjs";
 import { createLoop } from "./loop.mjs";
 import { runSync, runAsync } from "./sh.mjs";
 
+/**
+ * task-driver CLI entrypoint: wires config, Linear, git, gates, gh, executor,
+ * and the processing loop together, then runs it.
+ */
+
+// `here` is src/; the project root is one level up.
 const here = dirname(fileURLToPath(import.meta.url));
 const root = dirname(here);
 const workRoot = join(root, "work");
 
+/**
+ * Parse CLI arguments into a normalized options object.
+ * @param {string[]} argv
+ * @returns {{ dryRun: boolean, configPath: string }}
+ */
 function parseArgs(argv) {
   const args = { dryRun: false, configPath: join(root, "task-driver.config.json") };
   for (let i = 0; i < argv.length; i++) {
@@ -26,6 +37,10 @@ function parseArgs(argv) {
   return args;
 }
 
+/**
+ * Build the loop from config + dependencies and run it for all repos.
+ * @returns {Promise<void>}
+ */
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const config = loadConfig(args.configPath);
