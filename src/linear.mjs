@@ -22,6 +22,7 @@ const API_URL = "https://api.linear.app/graphql";
  * @typedef {object} LinearClient
  * @property {(teamKey: string, projectName: string) => Promise<LinearIssue[]>} listOpenIssues
  * @property {(identifier: string) => Promise<LinearIssue>} getIssue
+ * @property {(input: {teamId: string, projectId: string, title: string, description?: string}) => Promise<LinearIssue>} createIssue
  * @property {(issueId: string, body: string) => Promise<void>} comment
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
  * @property {(issueId: string, description: string) => Promise<void>} updateDescription
@@ -100,6 +101,10 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
       if (!data.issue) throw new Error(`Issue "${identifier}" not found`);
       return data.issue;
     },
+    /**
+     * @param {{teamId: string, projectId: string, title: string, description?: string}} input
+     * @returns {Promise<LinearIssue>}
+     */
     async createIssue({ teamId, projectId, title, description }) {
       const data = await gql(
         `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier title url } } }`,
