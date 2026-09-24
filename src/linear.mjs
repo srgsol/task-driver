@@ -8,6 +8,8 @@ import { homedir } from "node:os";
  */
 const API_URL = "https://api.linear.app/graphql";
 
+const RESOLVED_STATES = new Set(["Done", "Canceled"]);
+
 /**
  * @typedef {object} LinearIssue
  * @property {string} id
@@ -15,7 +17,25 @@ const API_URL = "https://api.linear.app/graphql";
  * @property {string} title
  * @property {string | null} description
  * @property {string} url
+ * @property {{ nodes?: { type: string; relatedIssue?: { state?: { name?: string } } }[] }} [relations]
+ * @property {{ nodes?: { type: string; issue?: { state?: { name?: string } } }[] }} [inverseRelations]
  */
+
+/**
+ * True when `issue` is blocked by an issue that has not reached a terminal state.
+ *
+ * Linear stores a `blocks` relation on the blocker and exposes it as an `inverseRelations` entry on
+ * the blocked issue (the relation's `issue` is the blocker and its `type` is `blocks`).
+ *
+ * @param {any} issue
+ * @returns {boolean}
+ */
+function hasUnresolvedBlocker(issue) {
+  return (issue.inverseRelations?.nodes ?? []).some(
+    (/** @type {{ type: string; issue?: { state?: { name?: string } } }} */ relation) =>
+      relation.type === "blocks" && !RESOLVED_STATES.has(relation.issue?.state?.name ?? ""),
+  );
+}
 
 /**
  * @typedef {object} LinearClient
@@ -97,7 +117,15 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
      */
     async listOpenIssues(teamKey, projectName) {
       const data = await gql(
-        `query($filter: IssueFilter) { issues(filter: $filter, first: 100) { nodes { id identifier title description url } } }`,
+        `query($filter: IssueFilter) {
+          issues(filter: $filter, first: 100) {
+            nodes {
+              id identifier title description url
+              relations { nodes { type relatedIssue { state { name } } } }
+              inverseRelations { nodes { type issue { state { name } } } }
+            }
+          }
+        }`,
         {
           filter: {
             team: { key: { eq: teamKey } },
@@ -107,7 +135,9 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
           },
         },
       );
-      return data.issues.nodes;
+      return (data.issues.nodes ?? []).filter(
+        (/** @type {any} */ issue) => !hasUnresolvedBlocker(issue),
+      );
     },
     /**
      * @param {string} identifier

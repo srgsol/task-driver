@@ -12,6 +12,116 @@ function fakeFetch(handler) {
   };
 }
 
+test("listOpenIssues requests relation fields", async () => {
+  let seenQuery;
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q) => {
+      seenQuery = q;
+      return { issues: { nodes: [] } };
+    }),
+  );
+  await client.listOpenIssues("SER", "tik-tak");
+  assert.match(seenQuery, /relations/);
+  assert.match(seenQuery, /inverseRelations/);
+});
+
+test("listOpenIssues skips issues blocked by an unresolved issue", async () => {
+  const nodes = [
+    {
+      id: "i1",
+      identifier: "SER-1",
+      title: "blocked",
+      description: null,
+      url: "u1",
+      relations: { nodes: [] },
+      inverseRelations: { nodes: [{ type: "blocks", issue: { state: { name: "Todo" } } }] },
+    },
+    {
+      id: "i2",
+      identifier: "SER-2",
+      title: "free",
+      description: null,
+      url: "u2",
+      relations: { nodes: [] },
+      inverseRelations: { nodes: [] },
+    },
+  ];
+  const client = createLinearClient(
+    "k",
+    fakeFetch(() => ({ issues: { nodes } })),
+  );
+  const issues = await client.listOpenIssues("SER", "tik-tak");
+  assert.deepEqual(
+    issues.map((i) => i.identifier),
+    ["SER-2"],
+  );
+});
+
+test("listOpenIssues keeps issues whose blocker is Done or Canceled", async () => {
+  const nodes = [
+    {
+      id: "i1",
+      identifier: "SER-1",
+      title: "t",
+      description: null,
+      url: "u1",
+      relations: { nodes: [] },
+      inverseRelations: { nodes: [{ type: "blocks", issue: { state: { name: "Done" } } }] },
+    },
+    {
+      id: "i2",
+      identifier: "SER-2",
+      title: "t",
+      description: null,
+      url: "u2",
+      relations: { nodes: [] },
+      inverseRelations: { nodes: [{ type: "blocks", issue: { state: { name: "Canceled" } } }] },
+    },
+  ];
+  const client = createLinearClient(
+    "k",
+    fakeFetch(() => ({ issues: { nodes } })),
+  );
+  const issues = await client.listOpenIssues("SER", "tik-tak");
+  assert.deepEqual(
+    issues.map((i) => i.identifier),
+    ["SER-1", "SER-2"],
+  );
+});
+
+test("listOpenIssues keeps blockers and non-blocking relations", async () => {
+  const nodes = [
+    {
+      id: "i1",
+      identifier: "SER-1",
+      title: "blocker",
+      description: null,
+      url: "u1",
+      relations: { nodes: [{ type: "blocks", relatedIssue: { state: { name: "Todo" } } }] },
+      inverseRelations: { nodes: [] },
+    },
+    {
+      id: "i2",
+      identifier: "SER-2",
+      title: "related",
+      description: null,
+      url: "u2",
+      relations: { nodes: [{ type: "related", relatedIssue: { state: { name: "Todo" } } }] },
+      inverseRelations: { nodes: [{ type: "related", issue: { state: { name: "Todo" } } }] },
+    },
+  ];
+  const client = createLinearClient(
+    "k",
+    fakeFetch(() => ({ issues: { nodes } })),
+  );
+  const issues = await client.listOpenIssues("SER", "tik-tak");
+  assert.deepEqual(
+    issues.map((i) => i.identifier),
+    ["SER-1", "SER-2"],
+  );
+});
+
 test("listOpenIssues filters Todo + task-driver label + project", async () => {
   let seen;
   const client = createLinearClient(
