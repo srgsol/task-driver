@@ -6,7 +6,6 @@ import { homedir } from "node:os";
  * Minimal Linear GraphQL client covering the operations task-driver needs:
  * list open issues, fetch one issue, comment, move state, update description.
  */
-
 const API_URL = "https://api.linear.app/graphql";
 
 /**
@@ -70,7 +69,7 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
       throw new Error(`Linear API returned non-JSON (HTTP ${res.status})`);
     }
     if (res.status !== 200 || json.errors?.length) {
-      const msgs = (json.errors ?? []).map((e) => e.message).join("; ");
+      const msgs = (json.errors ?? []).map((/** @type {{ message: string }} */ e) => e.message).join("; ");
       throw new Error(`Linear API error (HTTP ${res.status}): ${msgs || "unknown"}`);
     }
     return json.data;
@@ -97,12 +96,11 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
       const data = await gql(
         `query($id: String!) { issue(id: $id) { id identifier title description url } }`,
         { id: identifier },
-      );
-      if (!data.issue) throw new Error(`Issue "${identifier}" not found`);
+      ); if (!data.issue) throw new Error(`Issue "${identifier}" not found`);
       return data.issue;
     },
     /**
-     * @param {{teamId: string, projectId: string, title: string, description?: string}} input
+     * @param {{ teamId: string, projectId: string, title: string, description?: string }} input
      * @returns {Promise<LinearIssue>}
      */
     async createIssue({ teamId, projectId, title, description }) {
@@ -142,7 +140,7 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
         { id: teamId },
       );
       const state = (states.team?.states?.nodes ?? []).find(
-        (s) => s.name.toLowerCase() === stateName.toLowerCase(),
+        (/** @type {{ name: string }} */ s) => s.name.toLowerCase() === stateName.toLowerCase(),
       );
       if (!state) throw new Error(`State "${stateName}" not found`);
       const data = await gql(
