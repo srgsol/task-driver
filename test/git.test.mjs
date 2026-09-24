@@ -33,7 +33,8 @@ test("createBranch reuses an existing branch instead of aborting", () => {
   const seen = [];
   const git = createGit((cmd, args) => {
     seen.push(args.join(" "));
-    if (args.includes("-b")) return { status: 128, stdout: "", stderr: "fatal: a branch named 'SER-9-x' already exists" };
+    if (args.includes("-b"))
+      return { status: 128, stdout: "", stderr: "fatal: a branch named 'SER-9-x' already exists" };
     return { status: 0, stdout: "", stderr: "" };
   });
   assert.doesNotThrow(() => git.createBranch("/r", "SER-9-x"));

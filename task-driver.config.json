@@ -1,17 +1,29 @@
 {
   "repos": [
-    { "name": "tiktak", "path": "../tiktak", "team": "SER", "project": "tik-tak", "remote": "git@github.com:srgsol/tiktak.git",
+    {
+      "name": "tiktak",
+      "path": "../tiktak",
+      "team": "SER",
+      "project": "tik-tak",
+      "remote": "git@github.com:srgsol/tiktak.git",
       "gates": [
         { "name": "test", "cmd": "npm", "args": ["test"] },
         { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
         { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
-      ] },
-    { "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
+      ]
+    },
+    {
+      "name": "task-driver",
+      "path": ".",
+      "team": "SER",
+      "project": "task-driver",
+      "remote": "git@github.com:srgsol/task-driver.git",
       "gates": [
         { "name": "test", "cmd": "npm", "args": ["test"] },
         { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
         { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
-      ] }
+      ]
+    }
   ],
   "attempts": 2,
   "timeoutMs": 900000,

@@ -31,7 +31,10 @@ test("validateConfig rejects empty repos", () => {
 });
 
 test("validateConfig rejects missing fields", () => {
-  assert.throws(() => validateConfig({ repos: [{ name: "x" }] }), /name, path, team, project, remote/);
+  assert.throws(
+    () => validateConfig({ repos: [{ name: "x" }] }),
+    /name, path, team, project, remote/,
+  );
 });
 
 test("validateConfig requires project", () => {
@@ -80,7 +83,10 @@ test("task-driver repo declares test, tsc, and lint gates", () => {
   const c = loadConfig(p);
   const td = c.repos.find((r) => r.name === "task-driver");
   assert.ok(td, "task-driver repo is configured");
-  assert.deepEqual(td.gates.map((g) => g.name), ["test", "tsc", "lint"]);
+  assert.deepEqual(
+    td.gates.map((g) => g.name),
+    ["test", "tsc", "lint"],
+  );
   assert.deepEqual(td.gates, [
     { name: "test", cmd: "npm", args: ["test"] },
     { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },

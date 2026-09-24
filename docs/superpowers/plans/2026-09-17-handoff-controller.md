@@ -63,6 +63,7 @@ parameter so tests inject fakes instead of spawning real processes.
 ## Task 1: Scaffold — config, sh, slug, and repo wiring
 
 **Files:**
+
 - Create: `handoff/handoff.config.json`
 - Create: `handoff/config.mjs`
 - Create: `handoff/sh.mjs`
@@ -75,6 +76,7 @@ parameter so tests inject fakes instead of spawning real processes.
 - Modify: `eslint.config.js` (ignore `handoff/**`)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `loadConfig(path) → { repos:[{name,path,team,remote}], attempts, timeoutMs, thinking }`
@@ -118,8 +120,10 @@ export function validateConfig(raw) {
   const attempts = raw.attempts ?? DEFAULTS.attempts;
   const timeoutMs = raw.timeoutMs ?? DEFAULTS.timeoutMs;
   const thinking = raw.thinking ?? DEFAULTS.thinking;
-  if (!Number.isInteger(attempts) || attempts < 1) throw new Error("config.attempts must be an integer >= 1");
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 1) throw new Error("config.timeoutMs must be an integer >= 1");
+  if (!Number.isInteger(attempts) || attempts < 1)
+    throw new Error("config.attempts must be an integer >= 1");
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1)
+    throw new Error("config.timeoutMs must be an integer >= 1");
   return { repos, attempts, timeoutMs, thinking };
 }
 
@@ -148,11 +152,19 @@ export function runAsync(cmd, args, { cwd, env, timeoutMs } = {}) {
     child.stdout.on("data", (d) => (stdout += d));
     child.stderr.on("data", (d) => (stderr += d));
     if (timeoutMs) {
-      timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
+      timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGKILL");
+      }, timeoutMs);
     }
-    const done = (res) => { if (timer) clearTimeout(timer); resolve(res); };
+    const done = (res) => {
+      if (timer) clearTimeout(timer);
+      resolve(res);
+    };
     child.on("close", (code) => done({ exitCode: code, timedOut, stdout, stderr }));
-    child.on("error", (err) => done({ exitCode: null, timedOut, stdout, stderr: `${stderr}${err}` }));
+    child.on("error", (err) =>
+      done({ exitCode: null, timedOut, stdout, stderr: `${stderr}${err}` }),
+    );
   });
 }
 ```
@@ -188,7 +200,9 @@ import { join } from "node:path";
 import { loadConfig, validateConfig, DEFAULTS } from "../config.mjs";
 
 test("validateConfig applies defaults", () => {
-  const c = validateConfig({ repos: [{ name: "tiktak", path: ".", team: "SER", remote: "git@github.com:x/y.git" }] });
+  const c = validateConfig({
+    repos: [{ name: "tiktak", path: ".", team: "SER", remote: "git@github.com:x/y.git" }],
+  });
   assert.equal(c.attempts, DEFAULTS.attempts);
   assert.equal(c.timeoutMs, DEFAULTS.timeoutMs);
   assert.equal(c.thinking, DEFAULTS.thinking);
@@ -204,7 +218,13 @@ test("validateConfig rejects missing fields", () => {
 
 test("loadConfig reads and validates a file", () => {
   const p = join(tmpdir(), "cfg.json");
-  writeFileSync(p, JSON.stringify({ repos: [{ name: "tiktak", path: ".", team: "SER", remote: "git@github.com:x/y.git" }], attempts: 3 }));
+  writeFileSync(
+    p,
+    JSON.stringify({
+      repos: [{ name: "tiktak", path: ".", team: "SER", remote: "git@github.com:x/y.git" }],
+      attempts: 3,
+    }),
+  );
   const c = loadConfig(p);
   assert.equal(c.attempts, 3);
   assert.equal(c.repos.length, 1);
@@ -323,10 +343,12 @@ git commit -m "chore(handoff): scaffold controller config, sh, and slug helpers"
 ## Task 2: Linear GraphQL client
 
 **Files:**
+
 - Create: `handoff/linear.mjs`
 - Create: `handoff/test/linear.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `fetch` (injected; defaults to global).
 - Produces:
   - `getLinearApiKey() → string | undefined` (env `LINEAR_API_KEY`, else `~/.pi/linear.json`)
@@ -342,16 +364,26 @@ import { createLinearClient } from "../linear.mjs";
 function fakeFetch(handler) {
   return async (url, opts) => {
     const body = JSON.parse(opts.body);
-    return { status: 200, text: async () => JSON.stringify({ data: handler(body.query, body.variables) }) };
+    return {
+      status: 200,
+      text: async () => JSON.stringify({ data: handler(body.query, body.variables) }),
+    };
   };
 }
 
 test("listOpenIssues filters Todo + handoff label", async () => {
   let seen;
-  const client = createLinearClient("k", fakeFetch((q, vars) => {
-    seen = vars;
-    return { issues: { nodes: [{ id: "i1", identifier: "SER-9", title: "t", description: null, url: "u" }] } };
-  }));
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q, vars) => {
+      seen = vars;
+      return {
+        issues: {
+          nodes: [{ id: "i1", identifier: "SER-9", title: "t", description: null, url: "u" }],
+        },
+      };
+    }),
+  );
   const issues = await client.listOpenIssues("SER");
   assert.equal(issues.length, 1);
   assert.deepEqual(seen.filter.state, { name: { eq: "Todo" } });
@@ -361,12 +393,16 @@ test("listOpenIssues filters Todo + handoff label", async () => {
 
 test("moveState resolves state id then updates", async () => {
   const calls = [];
-  const client = createLinearClient("k", fakeFetch((q, vars) => {
-    calls.push(vars);
-    if (q.includes("issue(id: $id)")) return { issue: { team: { id: "t1" } } };
-    if (q.includes("states")) return { team: { states: { nodes: [{ id: "s1", name: "In Progress" }] } } };
-    return { issueUpdate: { success: true } };
-  }));
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q, vars) => {
+      calls.push(vars);
+      if (q.includes("issue(id: $id)")) return { issue: { team: { id: "t1" } } };
+      if (q.includes("states"))
+        return { team: { states: { nodes: [{ id: "s1", name: "In Progress" }] } } };
+      return { issueUpdate: { success: true } };
+    }),
+  );
   await client.moveState("i1", "In Progress");
   assert.equal(calls.length, 3);
   assert.equal(calls[2].input.stateId, "s1");
@@ -374,14 +410,23 @@ test("moveState resolves state id then updates", async () => {
 
 test("comment posts body", async () => {
   let seen;
-  const client = createLinearClient("k", fakeFetch((q, v) => { seen = v; return { commentCreate: { success: true } }; }));
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q, v) => {
+      seen = v;
+      return { commentCreate: { success: true } };
+    }),
+  );
   await client.comment("i1", "hello");
   assert.equal(seen.input.issueId, "i1");
   assert.equal(seen.input.body, "hello");
 });
 
 test("throws on API error", async () => {
-  const client = createLinearClient("k", async () => ({ status: 200, text: async () => JSON.stringify({ errors: [{ message: "boom" }] }) }));
+  const client = createLinearClient("k", async () => ({
+    status: 200,
+    text: async () => JSON.stringify({ errors: [{ message: "boom" }] }),
+  }));
   await assert.rejects(() => client.getIssue("SER-9"), /boom/);
 });
 ```
@@ -408,7 +453,9 @@ export function getLinearApiKey() {
     try {
       const raw = JSON.parse(readFileSync(file, "utf8"));
       if (raw.apiKey?.trim()) return raw.apiKey.trim();
-    } catch { /* ignore malformed config */ }
+    } catch {
+      /* ignore malformed config */
+    }
   }
   return undefined;
 }
@@ -422,7 +469,9 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
     });
     const text = await res.text();
     let json;
-    try { json = JSON.parse(text); } catch {
+    try {
+      json = JSON.parse(text);
+    } catch {
       throw new Error(`Linear API returned non-JSON (HTTP ${res.status})`);
     }
     if (res.status !== 200 || json.errors?.length) {
@@ -436,7 +485,13 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
     async listOpenIssues(teamKey) {
       const data = await gql(
         `query($filter: IssueFilter) { issues(filter: $filter, first: 100) { nodes { id identifier title description url } } }`,
-        { filter: { team: { key: { eq: teamKey } }, state: { name: { eq: "Todo" } }, labels: { name: { eq: "handoff" } } } },
+        {
+          filter: {
+            team: { key: { eq: teamKey } },
+            state: { name: { eq: "Todo" } },
+            labels: { name: { eq: "handoff" } },
+          },
+        },
       );
       return data.issues.nodes;
     },
@@ -456,10 +511,9 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
       if (!data.commentCreate?.success) throw new Error(`Failed to comment on ${issueId}`);
     },
     async moveState(issueId, stateName) {
-      const team = await gql(
-        `query($id: String!) { issue(id: $id) { team { id } } }`,
-        { id: issueId },
-      );
+      const team = await gql(`query($id: String!) { issue(id: $id) { team { id } } }`, {
+        id: issueId,
+      });
       const teamId = team.issue?.team?.id;
       if (!teamId) throw new Error(`Could not resolve team for ${issueId}`);
       const states = await gql(
@@ -497,10 +551,12 @@ git commit -m "feat(handoff): add Linear GraphQL client"
 ## Task 3: Git plumbing
 
 **Files:**
+
 - Create: `handoff/git.mjs`
 - Create: `handoff/test/git.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `runSync` (injected).
 - Produces: `createGit(runSync) → { isClean(repoPath), currentBranch(repoPath), checkout(repoPath, ref), createBranch(repoPath, branch), branchPushed(repoPath, branch), pushBranch(repoPath, branch) }` (booleans/void; `checkout`/`createBranch` throw on non-zero).
 
@@ -597,10 +653,12 @@ git commit -m "feat(handoff): add git plumbing"
 ## Task 4: Quality-gate runner
 
 **Files:**
+
 - Create: `handoff/gates.mjs`
 - Create: `handoff/test/gates.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `runSync` (injected).
 - Produces: `createGates(runSync) → { runGates(repoPath) → { green, results: [{name, passed, output}] } }` (names are exactly `test`, `tsc`, `lint`).
 
@@ -615,7 +673,10 @@ test("runGates reports green when all three pass", () => {
   const gates = createGates(() => ({ status: 0, stdout: "", stderr: "" }));
   const r = gates.runGates("/r");
   assert.equal(r.green, true);
-  assert.deepEqual(r.results.map((x) => x.name), ["test", "tsc", "lint"]);
+  assert.deepEqual(
+    r.results.map((x) => x.name),
+    ["test", "tsc", "lint"],
+  );
 });
 
 test("runGates reports red when any fails", () => {
@@ -628,7 +689,10 @@ test("runGates reports red when any fails", () => {
 
 test("runGates runs the exact three commands", () => {
   const seen = [];
-  const gates = createGates((cmd, args) => { seen.push([cmd, args]); return { status: 0, stdout: "", stderr: "" }; });
+  const gates = createGates((cmd, args) => {
+    seen.push([cmd, args]);
+    return { status: 0, stdout: "", stderr: "" };
+  });
   gates.runGates("/r");
   assert.deepEqual(seen, [
     ["npm", ["test"]],
@@ -682,10 +746,12 @@ git commit -m "feat(handoff): add quality-gate runner"
 ## Task 5: GitHub PR client
 
 **Files:**
+
 - Create: `handoff/gh.mjs`
 - Create: `handoff/test/gh.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `runSync` (injected).
 - Produces:
   - `getGhToken(repoPath) → string` (reads `GITHUB_TOKEN=` from `<repoPath>/.env`, unquoted)
@@ -718,7 +784,11 @@ test("createPR injects GH_TOKEN and parses json", () => {
   const gh = createGh((cmd, args, opts) => {
     seenArgs = args;
     seenEnv = opts.env;
-    return { status: 0, stdout: JSON.stringify({ url: "https://github.com/x/y/pull/3", number: 3 }), stderr: "" };
+    return {
+      status: 0,
+      stdout: JSON.stringify({ url: "https://github.com/x/y/pull/3", number: 3 }),
+      stderr: "",
+    };
   });
   const dir = mkdtempSync(join(tmpdir(), "gh-"));
   writeFileSync(join(dir, ".env"), "GITHUB_TOKEN=tok\n");
@@ -732,7 +802,10 @@ test("createPR throws on non-zero", () => {
   const gh = createGh(() => ({ status: 1, stdout: "", stderr: "denied" }));
   const dir = mkdtempSync(join(tmpdir(), "gh-"));
   writeFileSync(join(dir, ".env"), "GITHUB_TOKEN=tok\n");
-  assert.throws(() => gh.createPR({ repoPath: dir, base: "master", head: "x", title: "t", body: "b" }), /gh pr create failed/);
+  assert.throws(
+    () => gh.createPR({ repoPath: dir, base: "master", head: "x", title: "t", body: "b" }),
+    /gh pr create failed/,
+  );
 });
 ```
 
@@ -764,14 +837,24 @@ export function createGh(runSync) {
   return {
     createPR({ repoPath, base, head, title, body }) {
       const token = getGhToken(repoPath);
-      const r = runSync("gh", [
-        "pr", "create",
-        "--base", base,
-        "--head", head,
-        "--title", title,
-        "--body", body,
-        "--json", "url,number",
-      ], { cwd: repoPath, env: { ...process.env, GH_TOKEN: token } });
+      const r = runSync(
+        "gh",
+        [
+          "pr",
+          "create",
+          "--base",
+          base,
+          "--head",
+          head,
+          "--title",
+          title,
+          "--body",
+          body,
+          "--json",
+          "url,number",
+        ],
+        { cwd: repoPath, env: { ...process.env, GH_TOKEN: token } },
+      );
       if (r.status !== 0) throw new Error(`gh pr create failed: ${r.stderr}`);
       return JSON.parse(r.stdout);
     },
@@ -796,10 +879,12 @@ git commit -m "feat(handoff): add gh PR client"
 ## Task 6: pi subprocess executor
 
 **Files:**
+
 - Create: `handoff/executor.mjs`
 - Create: `handoff/test/executor.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `runAsync` (injected).
 - Produces:
   - `createExecutor(runAsync) → { runAgent({repoPath, sessionId, config, skillPath, message}) → Promise<{exitCode, timedOut, stdout, stderr}> }`
@@ -826,8 +911,11 @@ test("runAgent strips Linear and GitHub tokens from child env", async () => {
   process.env.GH_TOKEN = "x";
   process.env.LINEAR_API_KEY = "y";
   const r = await executor.runAgent({
-    repoPath: "/r", sessionId: "s", config: { thinking: "medium", timeoutMs: 1000 },
-    skillPath: "/sk.md", message: "do it",
+    repoPath: "/r",
+    sessionId: "s",
+    config: { thinking: "medium", timeoutMs: 1000 },
+    skillPath: "/sk.md",
+    message: "do it",
   });
   assert.equal(r.exitCode, 0);
   assert.equal(seenEnv.GH_TOKEN, undefined);
@@ -877,13 +965,19 @@ export function createExecutor(runAsync) {
   return {
     async runAgent({ repoPath, sessionId, config, skillPath, message }) {
       const args = [
-        "--print", "--mode", "json",
-        "--session-id", sessionId,
+        "--print",
+        "--mode",
+        "json",
+        "--session-id",
+        sessionId,
         "--approve",
         "--no-extensions",
-        "--skill", skillPath,
-        "--thinking", config.thinking,
-        "--", message,
+        "--skill",
+        skillPath,
+        "--thinking",
+        config.thinking,
+        "--",
+        message,
       ];
       return runAsync("pi", args, { cwd: repoPath, env: childEnv(), timeoutMs: config.timeoutMs });
     },
@@ -913,10 +1007,12 @@ git commit -m "feat(handoff): add pi subprocess executor"
 ## Task 7: The orchestration loop
 
 **Files:**
+
 - Create: `handoff/loop.mjs`
 - Create: `handoff/test/loop.test.mjs`
 
 **Interfaces:**
+
 - Consumes: injected `{ config, skillPath, linear, git, gates, gh, executor, log? }`; `branchName` from `slug.mjs`; `readPlan` from `executor.mjs`.
 - Produces: `createLoop(deps) → runLoop(dryRun) → Promise<Array<{identifier, outcome}>>` where `outcome ∈ { pr, failed, skipped, pr-failed, dry }`.
 
@@ -928,8 +1024,18 @@ import assert from "node:assert/strict";
 import { createLoop } from "../loop.mjs";
 
 function makeDeps(opts = {}) {
-  const calls = { moveState: [], comments: [], checkout: [], createBranch: [], runAgent: [], createPR: [], pushBranch: [] };
-  const agentResults = opts.agentResults ?? [{ exitCode: 0, timedOut: false, stdout: "", stderr: "" }];
+  const calls = {
+    moveState: [],
+    comments: [],
+    checkout: [],
+    createBranch: [],
+    runAgent: [],
+    createPR: [],
+    pushBranch: [],
+  };
+  const agentResults = opts.agentResults ?? [
+    { exitCode: 0, timedOut: false, stdout: "", stderr: "" },
+  ];
   let agentCall = 0;
   const git = {
     isClean: () => true,
@@ -940,17 +1046,48 @@ function makeDeps(opts = {}) {
     pushBranch: (p, b) => calls.pushBranch.push([p, b]),
     ...opts.git,
   };
-  const gates = { runGates: () => ({ green: true, results: [{ name: "test", passed: true, output: "" }] }), ...opts.gates };
+  const gates = {
+    runGates: () => ({ green: true, results: [{ name: "test", passed: true, output: "" }] }),
+    ...opts.gates,
+  };
   const linear = {
-    listOpenIssues: async () => opts.issues ?? [{ id: "i1", identifier: "SER-9", title: "Fix drag", description: "desc", url: "u" }],
+    listOpenIssues: async () =>
+      opts.issues ?? [
+        { id: "i1", identifier: "SER-9", title: "Fix drag", description: "desc", url: "u" },
+      ],
     moveState: async (id, s) => calls.moveState.push([id, s]),
     comment: async (id, b) => calls.comments.push([id, b]),
     ...opts.linear,
   };
-  const gh = { createPR: (a) => { calls.createPR.push(a); return { url: "https://x/pull/1", number: 1 }; }, ...opts.gh };
-  const executor = { runAgent: async (a) => { calls.runAgent.push(a); return agentResults[Math.min(agentCall++, agentResults.length - 1)]; } };
-  const config = { repos: [{ name: "tiktak", path: "/r", team: "SER", remote: "g" }], attempts: 2, timeoutMs: 1, thinking: "medium" };
-  const loop = createLoop({ config, skillPath: "/sk.md", linear, git, gates, gh, executor, log: () => {} });
+  const gh = {
+    createPR: (a) => {
+      calls.createPR.push(a);
+      return { url: "https://x/pull/1", number: 1 };
+    },
+    ...opts.gh,
+  };
+  const executor = {
+    runAgent: async (a) => {
+      calls.runAgent.push(a);
+      return agentResults[Math.min(agentCall++, agentResults.length - 1)];
+    },
+  };
+  const config = {
+    repos: [{ name: "tiktak", path: "/r", team: "SER", remote: "g" }],
+    attempts: 2,
+    timeoutMs: 1,
+    thinking: "medium",
+  };
+  const loop = createLoop({
+    config,
+    skillPath: "/sk.md",
+    linear,
+    git,
+    gates,
+    gh,
+    executor,
+    log: () => {},
+  });
   return { loop, calls };
 }
 
@@ -985,13 +1122,18 @@ test("failure path after two failures: comment, push, return to Todo", async () 
       { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
       { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
     ],
-    gates: { runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }) },
+    gates: {
+      runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }),
+    },
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "failed");
   assert.equal(calls.pushBranch.length, 1);
   assert.equal(calls.createPR.length, 0);
-  assert.deepEqual(calls.moveState, [["i1", "In Progress"], ["i1", "Todo"]]);
+  assert.deepEqual(calls.moveState, [
+    ["i1", "In Progress"],
+    ["i1", "Todo"],
+  ]);
 });
 
 test("preflight skips a dirty repo", async () => {
@@ -1019,32 +1161,61 @@ Expected: FAIL — module not found.
 
 - [ ] **Step 3: Write `handoff/loop.mjs`**
 
-```js
+````js
 import { branchName } from "./slug.mjs";
 import { readPlan } from "./executor.mjs";
 
 const BASE_BRANCH = "master";
 
-export function createLoop({ config, skillPath, linear, git, gates, gh, executor, log = () => {} }) {
+export function createLoop({
+  config,
+  skillPath,
+  linear,
+  git,
+  gates,
+  gh,
+  executor,
+  log = () => {},
+}) {
   const issuePrompt = (issue, branch) =>
-    [`Implement ${issue.identifier}: ${issue.title}`, "", issue.description || "(no description)", "", `Branch: ${branch}`].join("\n");
+    [
+      `Implement ${issue.identifier}: ${issue.title}`,
+      "",
+      issue.description || "(no description)",
+      "",
+      `Branch: ${branch}`,
+    ].join("\n");
 
   const repairPrompt = (issue, branch, result) => {
     const tail = `${result.stdout}\n${result.stderr}`.slice(-4000);
     return [
       `Your previous attempt for ${issue.identifier} did not pass verification.`,
-      "", "Output so far:", "```", tail, "```", "",
+      "",
+      "Output so far:",
+      "```",
+      tail,
+      "```",
+      "",
       `Fix it, re-run the three gates (npm test, npx tsc --noEmit, npm run lint), commit, and push branch ${branch}.`,
     ].join("\n");
   };
 
-  const gatesSummary = (r) => r.results.map((x) => `- \`${x.name}\`: ${x.passed ? "passed" : "FAILED"}`).join("\n");
+  const gatesSummary = (r) =>
+    r.results.map((x) => `- \`${x.name}\`: ${x.passed ? "passed" : "FAILED"}`).join("\n");
 
   function verify(repoPath, branch, result) {
     let pushed = false;
-    try { pushed = git.branchPushed(repoPath, branch); } catch { /* ignore */ }
+    try {
+      pushed = git.branchPushed(repoPath, branch);
+    } catch {
+      /* ignore */
+    }
     const gatesResult = gates.runGates(repoPath);
-    return { ok: result.exitCode === 0 && !result.timedOut && pushed && gatesResult.green, pushed, gatesResult };
+    return {
+      ok: result.exitCode === 0 && !result.timedOut && pushed && gatesResult.green,
+      pushed,
+      gatesResult,
+    };
   }
 
   async function processIssue(repo, issue, dryRun) {
@@ -1061,7 +1232,10 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
 
     try {
       await linear.moveState(issue.id, "In Progress");
-      await linear.comment(issue.id, `🤖 handoff: implementing ${issue.identifier} on branch \`${branch}\``);
+      await linear.comment(
+        issue.id,
+        `🤖 handoff: implementing ${issue.identifier} on branch \`${branch}\``,
+      );
     } catch (err) {
       log(`  ⚠️  ${issue.identifier}: claim failed (${err.message}) — skipping`);
       return { identifier: issue.identifier, outcome: "skipped" };
@@ -1071,28 +1245,53 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
     git.checkout(repo.path, BASE_BRANCH);
     git.createBranch(repo.path, branch);
 
-    const first = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: issuePrompt(issue, branch) });
+    const first = await executor.runAgent({
+      repoPath: repo.path,
+      sessionId,
+      config,
+      skillPath,
+      message: issuePrompt(issue, branch),
+    });
     let v = verify(repo.path, branch, first);
 
     if (!v.ok && config.attempts > 1) {
-      log(`  attempt 1 failed (exit=${first.exitCode}, timedOut=${first.timedOut}, pushed=${v.pushed}, green=${v.gatesResult.green})`);
-      const second = await executor.runAgent({ repoPath: repo.path, sessionId, config, skillPath, message: repairPrompt(issue, branch, first) });
+      log(
+        `  attempt 1 failed (exit=${first.exitCode}, timedOut=${first.timedOut}, pushed=${v.pushed}, green=${v.gatesResult.green})`,
+      );
+      const second = await executor.runAgent({
+        repoPath: repo.path,
+        sessionId,
+        config,
+        skillPath,
+        message: repairPrompt(issue, branch, first),
+      });
       v = verify(repo.path, branch, second);
     }
 
     const plan = readPlan(repo.path, issue.identifier);
 
     if (v.ok) {
-      const body = ["## Plan", plan || "(none)", "", "## Gates", gatesSummary(v.gatesResult)].join("\n");
+      const body = ["## Plan", plan || "(none)", "", "## Gates", gatesSummary(v.gatesResult)].join(
+        "\n",
+      );
       try {
-        const pr = gh.createPR({ repoPath: repo.path, base: BASE_BRANCH, head: branch, title: issue.title, body });
+        const pr = gh.createPR({
+          repoPath: repo.path,
+          base: BASE_BRANCH,
+          head: branch,
+          title: issue.title,
+          body,
+        });
         await linear.comment(issue.id, `✅ PR opened: ${pr.url}\n\n${gatesSummary(v.gatesResult)}`);
         log(`  ✅ ${issue.identifier}: PR ${pr.url} (${branch})`);
         git.checkout(repo.path, BASE_BRANCH);
         return { identifier: issue.identifier, outcome: "pr" };
       } catch (err) {
         log(`  ⚠️  ${issue.identifier}: PR create failed: ${err.message}`);
-        await linear.comment(issue.id, `⚠️ handoff: code done and pushed on \`${branch}\`, but PR creation failed: ${err.message}`);
+        await linear.comment(
+          issue.id,
+          `⚠️ handoff: code done and pushed on \`${branch}\`, but PR creation failed: ${err.message}`,
+        );
         git.checkout(repo.path, BASE_BRANCH);
         return { identifier: issue.identifier, outcome: "pr-failed" };
       }
@@ -1100,11 +1299,20 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
 
     const note = [
       `❌ handoff could not complete ${issue.identifier} after ${config.attempts} attempt(s).`,
-      "", "Verification:", gatesSummary(v.gatesResult), "",
+      "",
+      "Verification:",
+      gatesSummary(v.gatesResult),
+      "",
       plan ? `Plan:\n${plan}` : "",
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-    try { git.pushBranch(repo.path, branch); } catch { /* ignore */ }
+    try {
+      git.pushBranch(repo.path, branch);
+    } catch {
+      /* ignore */
+    }
     await linear.comment(issue.id, note);
     await linear.moveState(issue.id, "Todo");
     log(`  ❌ ${issue.identifier}: failed (branch ${branch} pushed, no PR)`);
@@ -1132,11 +1340,11 @@ export function createLoop({ config, skillPath, linear, git, gates, gh, executor
 
   return async function runLoop(dryRun) {
     const all = [];
-    for (const repo of config.repos) all.push(...await processRepo(repo, dryRun));
+    for (const repo of config.repos) all.push(...(await processRepo(repo, dryRun)));
     return all;
   };
 }
-```
+````
 
 - [ ] **Step 4: Run tests**
 
@@ -1155,10 +1363,12 @@ git commit -m "feat(handoff): add orchestration loop"
 ## Task 8: CLI entrypoint and the agent skill
 
 **Files:**
+
 - Create: `handoff/cli.mjs`
 - Create: `handoff/implement.md`
 
 **Interfaces:**
+
 - Consumes: `loadConfig`, `getLinearApiKey`/`createLinearClient`, `createGit`, `createGates`, `createGh`, `createExecutor`, `createLoop`, `runSync`/`runAsync` from `sh.mjs`.
 - Produces: `node handoff/cli.mjs [--dry-run] [--config path]` (exit 1 on any failure outcome or abort).
 
@@ -1220,7 +1430,9 @@ async function main() {
   const prs = count("pr");
   const failed = count("failed");
   const other = results.length - prs - failed;
-  console.log(`\nhandoff complete: ${prs} PR(s), ${failed} failure(s), ${other} skipped/other, ${results.length} total.`);
+  console.log(
+    `\nhandoff complete: ${prs} PR(s), ${failed} failure(s), ${other} skipped/other, ${results.length} total.`,
+  );
   process.exit(failed > 0 ? 1 : 0);
 }
 

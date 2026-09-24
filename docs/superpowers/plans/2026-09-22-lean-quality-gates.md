@@ -43,6 +43,7 @@ No new runtime modules. No changes under tiktak.
 ### Task 1: Typecheck tooling green (`tsc --noEmit` on `src/`)
 
 **Files:**
+
 - Create: `tsconfig.json`
 - Modify: `package.json` (devDependencies + `typecheck` script)
 - Modify: `package-lock.json` (via npm)
@@ -50,6 +51,7 @@ No new runtime modules. No changes under tiktak.
 - Modify: `src/loop.mjs`
 
 **Interfaces:**
+
 - Consumes: existing `runSync` / `runAsync` / `createLoop` call sites (signatures stay runtime-identical).
 - Produces: `npx tsc --noEmit` exits 0; optional `npm run typecheck` aliases the same command.
 
@@ -122,7 +124,7 @@ import { spawn, spawnSync } from "node:child_process";
 /**
  * @param {string} cmd
  * @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, input?: string }} [opts]
+ * @param {{ cwd?: string; env?: NodeJS.ProcessEnv; input?: string }} [opts]
  */
 export function runSync(cmd, args, { cwd, env, input } = {}) {
   const res = spawnSync(cmd, args, { cwd, env: env ?? process.env, input, encoding: "utf8" });
@@ -132,7 +134,12 @@ export function runSync(cmd, args, { cwd, env, input } = {}) {
 /**
  * @param {string} cmd
  * @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number, onChunk?: (stream: "stdout" | "stderr", text: string) => void }} [opts]
+ * @param {{
+ *   cwd?: string;
+ *   env?: NodeJS.ProcessEnv;
+ *   timeoutMs?: number;
+ *   onChunk?: (stream: "stdout" | "stderr", text: string) => void;
+ * }} [opts]
  */
 export function runAsync(cmd, args, { cwd, env, timeoutMs, onChunk } = {}) {
   return new Promise((resolve) => {
@@ -147,14 +154,28 @@ export function runAsync(cmd, args, { cwd, env, timeoutMs, onChunk } = {}) {
     let stderr = "";
     let timedOut = false;
     let timer;
-    child.stdout.on("data", (d) => { stdout += d; if (onChunk) onChunk("stdout", String(d)); });
-    child.stderr.on("data", (d) => { stderr += d; if (onChunk) onChunk("stderr", String(d)); });
+    child.stdout.on("data", (d) => {
+      stdout += d;
+      if (onChunk) onChunk("stdout", String(d));
+    });
+    child.stderr.on("data", (d) => {
+      stderr += d;
+      if (onChunk) onChunk("stderr", String(d));
+    });
     if (timeoutMs) {
-      timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
+      timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGKILL");
+      }, timeoutMs);
     }
-    const done = (res) => { if (timer) clearTimeout(timer); resolve(res); };
+    const done = (res) => {
+      if (timer) clearTimeout(timer);
+      resolve(res);
+    };
     child.on("close", (code) => done({ exitCode: code, timedOut, stdout, stderr }));
-    child.on("error", (err) => done({ exitCode: null, timedOut, stdout, stderr: `${stderr}${err}` }));
+    child.on("error", (err) =>
+      done({ exitCode: null, timedOut, stdout, stderr: `${stderr}${err}` }),
+    );
   });
 }
 ```
@@ -213,10 +234,12 @@ EOF
 ### Task 2: Declare `tsc` in task-driver gates (TDD on config pin)
 
 **Files:**
+
 - Modify: `test/config.test.mjs`
 - Modify: `task-driver.config.json`
 
 **Interfaces:**
+
 - Consumes: `loadConfig` from Task 1 era (unchanged).
 - Produces: task-driver repo entry gates named exactly `["test", "tsc", "lint"]` with commands matching the lean recommendation.
 
@@ -230,7 +253,10 @@ test("task-driver repo declares both test and lint gates", () => {
   const c = loadConfig(p);
   const td = c.repos.find((r) => r.name === "task-driver");
   assert.ok(td, "task-driver repo is configured");
-  assert.deepEqual(td.gates.map((g) => g.name), ["test", "lint"]);
+  assert.deepEqual(
+    td.gates.map((g) => g.name),
+    ["test", "lint"],
+  );
 });
 ```
 
@@ -242,7 +268,10 @@ test("task-driver repo declares test, tsc, and lint gates", () => {
   const c = loadConfig(p);
   const td = c.repos.find((r) => r.name === "task-driver");
   assert.ok(td, "task-driver repo is configured");
-  assert.deepEqual(td.gates.map((g) => g.name), ["test", "tsc", "lint"]);
+  assert.deepEqual(
+    td.gates.map((g) => g.name),
+    ["test", "tsc", "lint"],
+  );
   assert.deepEqual(td.gates, [
     { name: "test", cmd: "npm", args: ["test"] },
     { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },
@@ -311,9 +340,11 @@ EOF
 ### Task 3: README — recommendation vs config source of truth
 
 **Files:**
+
 - Modify: `README.md`
 
 **Interfaces:**
+
 - Consumes: none.
 - Produces: docs that match the spec’s hard rule (per-repo `gates[]`) and soft lean triad.
 
@@ -330,12 +361,18 @@ tsconfig.json             # checkJs typecheck for the `tsc` gate (src/**/*.mjs)
 Replace the task-driver-only example that currently shows only `test` + `lint` with the triad:
 
 ```json
-{ "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
+{
+  "name": "task-driver",
+  "path": ".",
+  "team": "SER",
+  "project": "task-driver",
+  "remote": "git@github.com:srgsol/task-driver.git",
   "gates": [
     { "name": "test", "cmd": "npm", "args": ["test"] },
     { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
     { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
-  ] }
+  ]
+}
 ```
 
 Immediately under the paragraph that starts with “Every repo must declare its gates explicitly”, ensure this clarification appears (add if missing):
@@ -398,16 +435,16 @@ EOF
 
 ## Self-review (plan vs spec)
 
-| Spec requirement | Task |
-|------------------|------|
+| Spec requirement                      | Task                                         |
+| ------------------------------------- | -------------------------------------------- |
 | Per-repo `gates[]` is source of truth | Task 2 (only task-driver entry); Task 3 docs |
-| Lean triad recommendation | Tasks 2–3 |
-| Keep `.mjs`; checkJs typecheck | Task 1 |
-| tiktak unchanged | Explicit non-touch in Tasks 1–3 |
-| Gate runner unchanged | No `src/gates.mjs` edits |
-| No format/coverage/audit/e2e | Global constraints |
-| README clarification | Task 3 |
-| Success: test + tsc + lint green | Task 2 Step 5; Task 3 Step 4 |
+| Lean triad recommendation             | Tasks 2–3                                    |
+| Keep `.mjs`; checkJs typecheck        | Task 1                                       |
+| tiktak unchanged                      | Explicit non-touch in Tasks 1–3              |
+| Gate runner unchanged                 | No `src/gates.mjs` edits                     |
+| No format/coverage/audit/e2e          | Global constraints                           |
+| README clarification                  | Task 3                                       |
+| Success: test + tsc + lint green      | Task 2 Step 5; Task 3 Step 4                 |
 
 Placeholder scan: none.  
 Type/name consistency: gate names `test` / `tsc` / `lint`; commands match config test deepEqual.

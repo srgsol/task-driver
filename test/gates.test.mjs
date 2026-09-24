@@ -12,7 +12,10 @@ test("runGates reports green when all pass", () => {
   const g = createGates(() => ({ status: 0, stdout: "", stderr: "" }));
   const r = g.runGates({ path: "/r", gates });
   assert.equal(r.green, true);
-  assert.deepEqual(r.results.map((x) => x.name), ["test", "tsc", "lint"]);
+  assert.deepEqual(
+    r.results.map((x) => x.name),
+    ["test", "tsc", "lint"],
+  );
 });
 
 test("runGates reports red when any fails", () => {
@@ -25,7 +28,10 @@ test("runGates reports red when any fails", () => {
 
 test("runGates runs the repo's configured gates", () => {
   const seen = [];
-  const g = createGates((cmd, args) => { seen.push([cmd, args]); return { status: 0, stdout: "", stderr: "" }; });
+  const g = createGates((cmd, args) => {
+    seen.push([cmd, args]);
+    return { status: 0, stdout: "", stderr: "" };
+  });
   g.runGates({ path: "/r", gates });
   assert.deepEqual(seen, [
     ["npm", ["test"]],
@@ -36,7 +42,10 @@ test("runGates runs the repo's configured gates", () => {
 
 test("runGates honours a custom gate list", () => {
   const seen = [];
-  const g = createGates((cmd, args) => { seen.push([cmd, args]); return { status: 0, stdout: "", stderr: "" }; });
+  const g = createGates((cmd, args) => {
+    seen.push([cmd, args]);
+    return { status: 0, stdout: "", stderr: "" };
+  });
   g.runGates({ path: "/r", gates: [{ name: "build", cmd: "npm", args: ["run", "build"] }] });
   assert.deepEqual(seen, [["npm", ["run", "build"]]]);
 });

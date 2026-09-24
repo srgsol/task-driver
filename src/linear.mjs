@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 
 /**
- * Minimal Linear GraphQL client covering the operations task-driver needs:
- * list open issues, fetch one issue, comment, move state, update description.
+ * Minimal Linear GraphQL client covering the operations task-driver needs: list open issues, fetch
+ * one issue, comment, move state, update description.
  */
 const API_URL = "https://api.linear.app/graphql";
 
@@ -21,7 +21,12 @@ const API_URL = "https://api.linear.app/graphql";
  * @typedef {object} LinearClient
  * @property {(teamKey: string, projectName: string) => Promise<LinearIssue[]>} listOpenIssues
  * @property {(identifier: string) => Promise<LinearIssue>} getIssue
- * @property {(input: {teamId: string, projectId: string, title: string, description?: string}) => Promise<LinearIssue>} createIssue
+ * @property {(input: {
+ *   teamId: string;
+ *   projectId: string;
+ *   title: string;
+ *   description?: string;
+ * }) => Promise<LinearIssue>} createIssue
  * @property {(issueId: string, body: string) => Promise<void>} comment
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
  * @property {(issueId: string, description: string) => Promise<void>} updateDescription
@@ -29,6 +34,7 @@ const API_URL = "https://api.linear.app/graphql";
 
 /**
  * Resolve the Linear API key from the environment or `~/.pi/linear.json`.
+ *
  * @returns {string | undefined}
  */
 export function getLinearApiKey() {
@@ -39,13 +45,16 @@ export function getLinearApiKey() {
     try {
       const raw = JSON.parse(readFileSync(file, "utf8"));
       if (raw.apiKey?.trim()) return raw.apiKey.trim();
-    } catch { /* ignore malformed config */ }
+    } catch {
+      /* ignore malformed config */
+    }
   }
   return undefined;
 }
 
 /**
  * Build a minimal Linear GraphQL client.
+ *
  * @param {string} apiKey
  * @param {typeof fetch} [fetchImpl]
  * @returns {LinearClient}
@@ -53,6 +62,7 @@ export function getLinearApiKey() {
 export function createLinearClient(apiKey, fetchImpl = fetch) {
   /**
    * Execute one GraphQL request and return its `data` payload.
+   *
    * @param {string} query
    * @param {Record<string, any>} variables
    * @returns {Promise<any>}
@@ -65,11 +75,15 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
     });
     const text = await res.text();
     let json;
-    try { json = JSON.parse(text); } catch {
+    try {
+      json = JSON.parse(text);
+    } catch {
       throw new Error(`Linear API returned non-JSON (HTTP ${res.status})`);
     }
     if (res.status !== 200 || json.errors?.length) {
-      const msgs = (json.errors ?? []).map((/** @type {{ message: string }} */ e) => e.message).join("; ");
+      const msgs = (json.errors ?? [])
+        .map((/** @type {{ message: string }} */ e) => e.message)
+        .join("; ");
       throw new Error(`Linear API error (HTTP ${res.status}): ${msgs || "unknown"}`);
     }
     return json.data;
@@ -84,7 +98,14 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
     async listOpenIssues(teamKey, projectName) {
       const data = await gql(
         `query($filter: IssueFilter) { issues(filter: $filter, first: 100) { nodes { id identifier title description url } } }`,
-        { filter: { team: { key: { eq: teamKey } }, project: { name: { eq: projectName } }, state: { name: { eq: "Todo" } }, labels: { name: { eq: "task-driver" } } } },
+        {
+          filter: {
+            team: { key: { eq: teamKey } },
+            project: { name: { eq: projectName } },
+            state: { name: { eq: "Todo" } },
+            labels: { name: { eq: "task-driver" } },
+          },
+        },
       );
       return data.issues.nodes;
     },
@@ -96,11 +117,12 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
       const data = await gql(
         `query($id: String!) { issue(id: $id) { id identifier title description url } }`,
         { id: identifier },
-      ); if (!data.issue) throw new Error(`Issue "${identifier}" not found`);
+      );
+      if (!data.issue) throw new Error(`Issue "${identifier}" not found`);
       return data.issue;
     },
     /**
-     * @param {{ teamId: string, projectId: string, title: string, description?: string }} input
+     * @param {{ teamId: string; projectId: string; title: string; description?: string }} input
      * @returns {Promise<LinearIssue>}
      */
     async createIssue({ teamId, projectId, title, description }) {
@@ -129,10 +151,9 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
      * @returns {Promise<void>}
      */
     async moveState(issueId, stateName) {
-      const team = await gql(
-        `query($id: String!) { issue(id: $id) { team { id } } }`,
-        { id: issueId },
-      );
+      const team = await gql(`query($id: String!) { issue(id: $id) { team { id } } }`, {
+        id: issueId,
+      });
       const teamId = team.issue?.team?.id;
       if (!teamId) throw new Error(`Could not resolve team for ${issueId}`);
       const states = await gql(

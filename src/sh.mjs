@@ -1,20 +1,28 @@
 import { spawn, spawnSync } from "node:child_process";
 
 /**
- * Child-process helpers. `runSync` is used for quick verification commands
- * (gates, git, gh); `runAsync` is used for the long-running, streaming `pi`
- * agent process.
+ * Child-process helpers. `runSync` is used for quick verification commands (gates, git, gh);
+ * `runAsync` is used for the long-running, streaming `pi` agent process.
  */
 
 /**
- * @typedef {{ status: number, stdout: string, stderr: string }} SyncRunResult
- * @typedef {{ cwd?: string, env?: NodeJS.ProcessEnv, input?: string }} SyncRunOptions
- * @typedef {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number, onChunk?: (stream: "stdout" | "stderr", text: string) => void }} AsyncRunOptions
- * @typedef {{ exitCode: number | null, timedOut: boolean, stdout: string, stderr: string }} AsyncRunResult
+ * @typedef {{ status: number; stdout: string; stderr: string }} SyncRunResult
+ *
+ * @typedef {{ cwd?: string; env?: NodeJS.ProcessEnv; input?: string }} SyncRunOptions
+ *
+ * @typedef {{
+ *   cwd?: string;
+ *   env?: NodeJS.ProcessEnv;
+ *   timeoutMs?: number;
+ *   onChunk?: (stream: "stdout" | "stderr", text: string) => void;
+ * }} AsyncRunOptions
+ *
+ * @typedef {{ exitCode: number | null; timedOut: boolean; stdout: string; stderr: string }} AsyncRunResult
  */
 
 /**
  * Run a command synchronously and capture its status and output.
+ *
  * @param {string} cmd
  * @param {string[]} args
  * @param {SyncRunOptions} [opts]
@@ -27,6 +35,7 @@ export function runSync(cmd, args, { cwd, env, input } = {}) {
 
 /**
  * Run a command asynchronously, streaming stdout/stderr and enforcing a timeout.
+ *
  * @param {string} cmd
  * @param {string[]} args
  * @param {AsyncRunOptions} [opts]
@@ -46,13 +55,27 @@ export function runAsync(cmd, args, { cwd, env, timeoutMs, onChunk } = {}) {
     let timedOut = false;
     /** @type {NodeJS.Timeout | undefined} */
     let timer;
-    child.stdout.on("data", (d) => { stdout += d; if (onChunk) onChunk("stdout", String(d)); });
-    child.stderr.on("data", (d) => { stderr += d; if (onChunk) onChunk("stderr", String(d)); });
+    child.stdout.on("data", (d) => {
+      stdout += d;
+      if (onChunk) onChunk("stdout", String(d));
+    });
+    child.stderr.on("data", (d) => {
+      stderr += d;
+      if (onChunk) onChunk("stderr", String(d));
+    });
     if (timeoutMs) {
-      timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
+      timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGKILL");
+      }, timeoutMs);
     }
-    const done = (/** @type {AsyncRunResult} */ res) => { if (timer) clearTimeout(timer); resolve(res); };
+    const done = (/** @type {AsyncRunResult} */ res) => {
+      if (timer) clearTimeout(timer);
+      resolve(res);
+    };
     child.on("close", (code) => done({ exitCode: code, timedOut, stdout, stderr }));
-    child.on("error", (err) => done({ exitCode: null, timedOut, stdout, stderr: `${stderr}${err}` }));
+    child.on("error", (err) =>
+      done({ exitCode: null, timedOut, stdout, stderr: `${stderr}${err}` }),
+    );
   });
 }

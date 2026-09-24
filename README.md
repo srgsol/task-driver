@@ -71,12 +71,18 @@ package.json
 ```json
 {
   "repos": [
-    { "name": "tiktak", "path": "../tiktak", "team": "SER", "project": "tik-tak", "remote": "git@github.com:srgsol/tiktak.git",
+    {
+      "name": "tiktak",
+      "path": "../tiktak",
+      "team": "SER",
+      "project": "tik-tak",
+      "remote": "git@github.com:srgsol/tiktak.git",
       "gates": [
         { "name": "test", "cmd": "npm", "args": ["test"] },
         { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
         { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
-      ] }
+      ]
+    }
   ],
   "attempts": 2,
   "timeoutMs": 900000,
@@ -84,17 +90,17 @@ package.json
 }
 ```
 
-| Key | Meaning |
-|---|---|
-| `repos[].name` | Label used in session ids, log names, and messages |
-| `repos[].path` | Checkout location, relative to this config file |
-| `repos[].team` | Linear team key to poll |
-| `repos[].project` | Linear project name to poll (exact match). Each repo routes only issues in this project. |
-| `repos[].remote` | Informational (push uses the checkout's own remote) |
-| `repos[].gates` | Required; the full list of gates to run. List every gate the repo has, including `test`, since there is no default set. See [Gates](#gates). |
-| `attempts` | Max `pi` runs per issue (1 = no repair pass) |
-| `timeoutMs` | Wall-clock cap per `pi` run (`900000` = 15 min) |
-| `thinking` | `pi --thinking` level (`off`…`max`) |
+| Key               | Meaning                                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repos[].name`    | Label used in session ids, log names, and messages                                                                                           |
+| `repos[].path`    | Checkout location, relative to this config file                                                                                              |
+| `repos[].team`    | Linear team key to poll                                                                                                                      |
+| `repos[].project` | Linear project name to poll (exact match). Each repo routes only issues in this project.                                                     |
+| `repos[].remote`  | Informational (push uses the checkout's own remote)                                                                                          |
+| `repos[].gates`   | Required; the full list of gates to run. List every gate the repo has, including `test`, since there is no default set. See [Gates](#gates). |
+| `attempts`        | Max `pi` runs per issue (1 = no repair pass)                                                                                                 |
+| `timeoutMs`       | Wall-clock cap per `pi` run (`900000` = 15 min)                                                                                              |
+| `thinking`        | `pi --thinking` level (`off`…`max`)                                                                                                          |
 
 ### Gates
 
@@ -105,12 +111,18 @@ want a solid minimum is `test` · `tsc` · `lint`, but each repo lists exactly
 what the controller should run.
 
 ```json
-{ "name": "task-driver", "path": ".", "team": "SER", "project": "task-driver", "remote": "git@github.com:srgsol/task-driver.git",
+{
+  "name": "task-driver",
+  "path": ".",
+  "team": "SER",
+  "project": "task-driver",
+  "remote": "git@github.com:srgsol/task-driver.git",
   "gates": [
     { "name": "test", "cmd": "npm", "args": ["test"] },
     { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
     { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
-  ] }
+  ]
+}
 ```
 
 Each gate is a command the controller re-runs until all are green before
@@ -145,10 +157,14 @@ To bring a new repository under the controller, do the following:
    (there is no default set — see [Gates](#gates)):
 
 ```json
-{ "name": "<repo>", "path": "../<repo>", "team": "SER", "project": "<project>", "remote": "git@github.com:srgsol/<repo>.git",
-  "gates": [
-    { "name": "test", "cmd": "npm", "args": ["test"] }
-  ] }
+{
+  "name": "<repo>",
+  "path": "../<repo>",
+  "team": "SER",
+  "project": "<project>",
+  "remote": "git@github.com:srgsol/<repo>.git",
+  "gates": [{ "name": "test", "cmd": "npm", "args": ["test"] }]
+}
 ```
 
 6. **Verify** with a dry run, which lists the plan without changing anything:
@@ -163,13 +179,13 @@ issue tracking a CLI option to add a repository (`task-driver add-repo`):
 
 ## Conventions
 
-| Thing | Value |
-|---|---|
-| Branch | `SER-<num>-<slug>` — kebab-cased, lowercased title, ≤ 40 chars |
-| Base | `master` |
-| Commit | `SER-<num>: <title>` |
-| PR title | the issue title |
-| Session id | `task-driver-<repo>-<ISSUE>` |
+| Thing      | Value                                                          |
+| ---------- | -------------------------------------------------------------- |
+| Branch     | `SER-<num>-<slug>` — kebab-cased, lowercased title, ≤ 40 chars |
+| Base       | `master`                                                       |
+| Commit     | `SER-<num>: <title>`                                           |
+| PR title   | the issue title                                                |
+| Session id | `task-driver-<repo>-<ISSUE>`                                   |
 
 ## Run artifacts
 

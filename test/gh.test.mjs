@@ -24,7 +24,8 @@ test("createPR injects GH_TOKEN, omits --json, and parses the PR url", () => {
     seenEnv = opts.env;
     return {
       status: 0,
-      stdout: "Creating pull request for SER-9-x into master in x/y\n\nhttps://github.com/x/y/pull/3\n",
+      stdout:
+        "Creating pull request for SER-9-x into master in x/y\n\nhttps://github.com/x/y/pull/3\n",
       stderr: "",
     };
   });
@@ -42,5 +43,8 @@ test("createPR throws on non-zero", () => {
   const gh = createGh(() => ({ status: 1, stdout: "", stderr: "denied" }));
   const dir = mkdtempSync(join(tmpdir(), "gh-"));
   writeFileSync(join(dir, ".env"), "GITHUB_TOKEN=tok\n");
-  assert.throws(() => gh.createPR({ repoPath: dir, base: "master", head: "x", title: "t", body: "b" }), /gh pr create failed/);
+  assert.throws(
+    () => gh.createPR({ repoPath: dir, base: "master", head: "x", title: "t", body: "b" }),
+    /gh pr create failed/,
+  );
 });

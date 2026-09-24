@@ -3,8 +3,20 @@ import assert from "node:assert/strict";
 import { createLoop, upsertPlanSection } from "../src/loop.mjs";
 
 function makeDeps(opts = {}) {
-  const calls = { listOpenIssues: [], moveState: [], comments: [], updateDescription: [], checkout: [], createBranch: [], runAgent: [], createPR: [], pushBranch: [] };
-  const agentResults = opts.agentResults ?? [{ exitCode: 0, timedOut: false, stdout: "", stderr: "" }];
+  const calls = {
+    listOpenIssues: [],
+    moveState: [],
+    comments: [],
+    updateDescription: [],
+    checkout: [],
+    createBranch: [],
+    runAgent: [],
+    createPR: [],
+    pushBranch: [],
+  };
+  const agentResults = opts.agentResults ?? [
+    { exitCode: 0, timedOut: false, stdout: "", stderr: "" },
+  ];
   let agentCall = 0;
   const git = {
     isClean: () => true,
@@ -15,22 +27,68 @@ function makeDeps(opts = {}) {
     pushBranch: (p, b) => calls.pushBranch.push([p, b]),
     ...opts.git,
   };
-  const gates = { runGates: () => ({ green: true, results: [{ name: "test", passed: true, output: "" }] }), ...opts.gates };
+  const gates = {
+    runGates: () => ({ green: true, results: [{ name: "test", passed: true, output: "" }] }),
+    ...opts.gates,
+  };
   const linear = {
-    listOpenIssues: async (...args) => { calls.listOpenIssues = args; return opts.issues ?? [{ id: "i1", identifier: "SER-9", title: "Fix drag", description: "desc", url: "u" }]; },
+    listOpenIssues: async (...args) => {
+      calls.listOpenIssues = args;
+      return (
+        opts.issues ?? [
+          { id: "i1", identifier: "SER-9", title: "Fix drag", description: "desc", url: "u" },
+        ]
+      );
+    },
     moveState: async (id, s) => calls.moveState.push([id, s]),
     comment: async (id, b) => calls.comments.push([id, b]),
     updateDescription: async (id, d) => calls.updateDescription.push([id, d]),
     ...opts.linear,
   };
-  const gh = { createPR: (a) => { calls.createPR.push(a); return { url: "https://x/pull/1", number: 1 }; }, ...opts.gh };
-  const executor = { runAgent: async (a) => { calls.runAgent.push(a); return agentResults[Math.min(agentCall++, agentResults.length - 1)]; } };
-  const config = { repos: [{ name: "tiktak", path: "/r", team: "SER", project: "tik-tak", remote: "g", gates: [
-    { name: "test", cmd: "npm", args: ["test"] },
-    { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },
-    { name: "lint", cmd: "npm", args: ["run", "lint"] },
-  ] }], attempts: 2, timeoutMs: 1, thinking: "medium" };
-  const loop = createLoop({ config, skillPath: "/sk.md", linear, git, gates, gh, executor, workRoot: "/w", readPlan: opts.readPlan ?? (() => null), log: () => {} });
+  const gh = {
+    createPR: (a) => {
+      calls.createPR.push(a);
+      return { url: "https://x/pull/1", number: 1 };
+    },
+    ...opts.gh,
+  };
+  const executor = {
+    runAgent: async (a) => {
+      calls.runAgent.push(a);
+      return agentResults[Math.min(agentCall++, agentResults.length - 1)];
+    },
+  };
+  const config = {
+    repos: [
+      {
+        name: "tiktak",
+        path: "/r",
+        team: "SER",
+        project: "tik-tak",
+        remote: "g",
+        gates: [
+          { name: "test", cmd: "npm", args: ["test"] },
+          { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },
+          { name: "lint", cmd: "npm", args: ["run", "lint"] },
+        ],
+      },
+    ],
+    attempts: 2,
+    timeoutMs: 1,
+    thinking: "medium",
+  };
+  const loop = createLoop({
+    config,
+    skillPath: "/sk.md",
+    linear,
+    git,
+    gates,
+    gh,
+    executor,
+    workRoot: "/w",
+    readPlan: opts.readPlan ?? (() => null),
+    log: () => {},
+  });
   return { loop, calls };
 }
 
@@ -79,13 +137,18 @@ test("failure path after two failures: comment, push, return to Todo", async () 
       { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
       { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
     ],
-    gates: { runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }) },
+    gates: {
+      runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }),
+    },
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "failed");
   assert.equal(calls.pushBranch.length, 1);
   assert.equal(calls.createPR.length, 0);
-  assert.deepEqual(calls.moveState, [["i1", "In Progress"], ["i1", "Todo"]]);
+  assert.deepEqual(calls.moveState, [
+    ["i1", "In Progress"],
+    ["i1", "Todo"],
+  ]);
 });
 
 test("preflight skips a dirty repo", async () => {
@@ -122,7 +185,9 @@ test("writes the plan into the issue description on failure too", async () => {
       { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
       { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
     ],
-    gates: { runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }) },
+    gates: {
+      runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }),
+    },
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "failed");

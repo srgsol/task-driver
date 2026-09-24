@@ -1,17 +1,21 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/**
- * GitHub helpers: reads a per-repo token and opens pull requests via `gh`.
- */
+/** GitHub helpers: reads a per-repo token and opens pull requests via `gh`. */
 
 /**
- * @typedef {{ url: string, number: number }} PrResult
- * @typedef {(cmd: string, args: string[], opts?: { cwd?: string, env?: NodeJS.ProcessEnv, input?: string }) => { status: number, stdout: string, stderr: string }} RunSync
+ * @typedef {{ url: string; number: number }} PrResult
+ *
+ * @typedef {(
+ *   cmd: string,
+ *   args: string[],
+ *   opts?: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string },
+ * ) => { status: number; stdout: string; stderr: string }} RunSync
  */
 
 /**
  * Read the GitHub token from a repository's `.env` file.
+ *
  * @param {string} repoPath
  * @returns {string}
  */
@@ -30,25 +34,33 @@ export function getGhToken(repoPath) {
 
 /**
  * Build a `gh pr create` runner bound to a `runSync` implementation.
+ *
  * @param {RunSync} runSync
- * @returns {{ createPR(opts: { repoPath: string, base: string, head: string, title: string, body: string }): PrResult }}
+ * @returns {{
+ *   createPR(opts: {
+ *     repoPath: string;
+ *     base: string;
+ *     head: string;
+ *     title: string;
+ *     body: string;
+ *   }): PrResult;
+ * }}
  */
 export function createGh(runSync) {
   return {
     /**
      * Create a GitHub pull request and parse the new PR URL from `gh` output.
-     * @param {{ repoPath: string, base: string, head: string, title: string, body: string }} opts
+     *
+     * @param {{ repoPath: string; base: string; head: string; title: string; body: string }} opts
      * @returns {PrResult}
      */
     createPR({ repoPath, base, head, title, body }) {
       const token = getGhToken(repoPath);
-      const r = runSync("gh", [
-        "pr", "create",
-        "--base", base,
-        "--head", head,
-        "--title", title,
-        "--body", body,
-      ], { cwd: repoPath, env: { ...process.env, GH_TOKEN: token } });
+      const r = runSync(
+        "gh",
+        ["pr", "create", "--base", base, "--head", head, "--title", title, "--body", body],
+        { cwd: repoPath, env: { ...process.env, GH_TOKEN: token } },
+      );
       const output = `${r.stdout}${r.stderr}`;
       if (r.status !== 0) throw new Error(`gh pr create failed: ${output.trim()}`);
       // `gh pr create` has no --json flag; it prints the new PR URL to stdout.

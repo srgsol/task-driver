@@ -1,10 +1,15 @@
 /**
- * Git helpers: thin wrappers over `git` used by the processing loop to manage
- * branches, verify pushes, and check the working tree.
+ * Git helpers: thin wrappers over `git` used by the processing loop to manage branches, verify
+ * pushes, and check the working tree.
  */
 
 /**
- * @typedef {(cmd: string, args: string[], opts?: { cwd?: string, env?: NodeJS.ProcessEnv, input?: string }) => { status: number, stdout: string, stderr: string }} RunSync
+ * @typedef {(
+ *   cmd: string,
+ *   args: string[],
+ *   opts?: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string },
+ * ) => { status: number; stdout: string; stderr: string }} RunSync
+ *
  * @typedef {object} Git
  * @property {(repoPath: string) => boolean} isClean
  * @property {(repoPath: string) => string} currentBranch
@@ -16,11 +21,17 @@
 
 /**
  * Build a git command runner bound to a `runSync` implementation.
+ *
  * @param {RunSync} runSync
  * @returns {Git}
  */
 export function createGit(runSync) {
-  /** @type {(repoPath: string, args: string[]) => { status: number, stdout: string, stderr: string }} */
+  /**
+   * @type {(
+   *   repoPath: string,
+   *   args: string[],
+   * ) => { status: number; stdout: string; stderr: string }}
+   */
   const git = (repoPath, args) => runSync("git", args, { cwd: repoPath });
   return {
     /**
@@ -48,6 +59,7 @@ export function createGit(runSync) {
     },
     /**
      * Create the given branch, reusing it if it already exists.
+     *
      * @param {string} repoPath
      * @param {string} branch
      * @returns {void}
@@ -59,7 +71,9 @@ export function createGit(runSync) {
       // Reuse it rather than aborting the run.
       const reused = git(repoPath, ["checkout", branch]);
       if (reused.status !== 0) {
-        throw new Error(`git checkout ${branch} failed: ${(created.stderr || reused.stderr).trim()}`);
+        throw new Error(
+          `git checkout ${branch} failed: ${(created.stderr || reused.stderr).trim()}`,
+        );
       }
     },
     /**

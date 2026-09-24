@@ -13,19 +13,19 @@ sequentially). A human stays at the merge step.
 
 ## Decisions made in this session
 
-| # | Decision | Choice |
-|---|----------|--------|
-| 1 | Shape | **A (local loop)**, designed seam-first so B is adapter work |
-| 2 | Trigger | **Manual CLI batch** (`npm run handoff`) |
-| — | Multi-repo | **Config-driven from day one** (starts with one repo entry) |
-| 3 | Branch convention | **`SER-<num>-<slug>`** (no type prefix) |
-| 4 | Guardrails | **2 attempts/issue · 15-min timeout · `--thinking medium`** · failure = comment + push partial + return to `Todo` |
-| 5 | Parallelism | **Sequential first** (concurrency is a later config knob) |
-| 6 | Write-back | **Middle:** claim `Todo→In Progress` + comment · PR-link comment, stay `In Progress` · no `In Review` hop |
-| 7 | CI layer | **Deferred to Shape B** (trigger: first time you merge a PR you didn't personally test) |
-| — | Naming | **`handoff`** |
-| — | Claim filter | **`state = Todo` AND label `handoff`** |
-| — | Division of labor | **Approach 1: thin controller, fat agent** |
+| #   | Decision          | Choice                                                                                                            |
+| --- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 1   | Shape             | **A (local loop)**, designed seam-first so B is adapter work                                                      |
+| 2   | Trigger           | **Manual CLI batch** (`npm run handoff`)                                                                          |
+| —   | Multi-repo        | **Config-driven from day one** (starts with one repo entry)                                                       |
+| 3   | Branch convention | **`SER-<num>-<slug>`** (no type prefix)                                                                           |
+| 4   | Guardrails        | **2 attempts/issue · 15-min timeout · `--thinking medium`** · failure = comment + push partial + return to `Todo` |
+| 5   | Parallelism       | **Sequential first** (concurrency is a later config knob)                                                         |
+| 6   | Write-back        | **Middle:** claim `Todo→In Progress` + comment · PR-link comment, stay `In Progress` · no `In Review` hop         |
+| 7   | CI layer          | **Deferred to Shape B** (trigger: first time you merge a PR you didn't personally test)                           |
+| —   | Naming            | **`handoff`**                                                                                                     |
+| —   | Claim filter      | **`state = Todo` AND label `handoff`**                                                                            |
+| —   | Division of labor | **Approach 1: thin controller, fat agent**                                                                        |
 
 **Branch slug:** kebab-cased, lowercased issue title, truncated to ~40 chars
 (e.g. `SER-9-fix-step-drag-handles`). Commit message mirrors this with no type
@@ -68,11 +68,11 @@ secrets in B), `Trigger` (CLI now, cron/webhook later).
 
 ### Why a dedicated `linear.js`
 
-The Linear extension's access exists *inside a pi session* (registered via
+The Linear extension's access exists _inside a pi session_ (registered via
 `pi.registerTool`), not as an importable library. The controller is a plain
-deterministic Node script that *spawns* pi — it has no session, no tool
+deterministic Node script that _spawns_ pi — it has no session, no tool
 harness, no LLM — so it cannot use the extension. The pi subprocess
-deliberately has *no* Linear access either (`--no-extensions`): it receives the
+deliberately has _no_ Linear access either (`--no-extensions`): it receives the
 issue text in its prompt and owns only code. `linear.js` is ~60–80 lines
 covering the four operations the controller needs. Extracting a shared core
 with the extension is deferred until the duplication grows.
@@ -98,13 +98,13 @@ with the extension is deferred until the duplication grows.
 
 **Credentials — three sources, none global:**
 
-| Credential | Where it lives | Who uses it | How |
-|---|---|---|---|
-| `GITHUB_TOKEN` (PAT) | each repo's `.env` | `gh.js` | injected as `GH_TOKEN` per command |
-| `LINEAR_API_KEY` | env var **or** `~/.pi/linear.json` | `linear.js` | env first, then the `~/.pi/linear.json` file |
-| SSH key | `~/.ssh` + agent | pi subprocess | push over `git@github.com:…` |
+| Credential           | Where it lives                     | Who uses it   | How                                          |
+| -------------------- | ---------------------------------- | ------------- | -------------------------------------------- |
+| `GITHUB_TOKEN` (PAT) | each repo's `.env`                 | `gh.js`       | injected as `GH_TOKEN` per command           |
+| `LINEAR_API_KEY`     | env var **or** `~/.pi/linear.json` | `linear.js`   | env first, then the `~/.pi/linear.json` file |
+| SSH key              | `~/.ssh` + agent                   | pi subprocess | push over `git@github.com:…`                 |
 
-Asymmetry: **Linear is one key** (team-wide, not per-repo, so *not* in any
+Asymmetry: **Linear is one key** (team-wide, not per-repo, so _not_ in any
 repo `.env`); **GitHub is one PAT per repo** (the whole point of per-process
 isolation).
 
@@ -166,7 +166,7 @@ on after claiming (trace marker; cannot cause re-picks because `Todo` is gone).
 
 **Idempotency:** claiming is the only `Todo → In Progress` transition, and the
 queue only picks `Todo` issues, so re-running never double-claims or
-double-PRs. Known gap: a hard crash *after* claim but *before* PR leaves an
+double-PRs. Known gap: a hard crash _after_ claim but _before_ PR leaves an
 issue stuck in `In Progress`; v1 recovery is moving it back to `Todo` manually.
 A `--recover` flag to auto-detect orphans is a later add, not v1.
 
@@ -182,8 +182,8 @@ pi --print --mode json \
    "Implement SER-9: <title>\n\n<description>\n\nBranch: SER-9-<slug>"
 ```
 
-- **`--no-extensions`** enforces "the agent never touches Linear" *by
-  construction* (no Linear tools in its session), not just by instruction.
+- **`--no-extensions`** enforces "the agent never touches Linear" _by
+  construction_ (no Linear tools in its session), not just by instruction.
 - **env:** cwd = repo path; inherits the model API key. **No** `GH_TOKEN`, **no**
   `LINEAR_API_KEY` — the agent does SSH push only.
 - **timeout:** 15 min (900 000 ms).
@@ -195,7 +195,7 @@ pi --print --mode json \
 - **Trivial** → implement directly (TDD for any logic), run `npm test`,
   `npx tsc --noEmit`, `npm run lint` until green, commit `SER-9: <title>`,
   `git push -u origin SER-9-<slug>` over SSH.
-- **Non-trivial** → produce a short plan using the brainstorming *method*:
+- **Non-trivial** → produce a short plan using the brainstorming _method_:
   ask the clarifiers and **auto-accept the recommended/default answer to each,
   recording the assumption** (there is no human in the loop). Write the plan to
   `handoff/plans/SER-<num>.md`, then implement that plan, run the gates until
@@ -215,22 +215,23 @@ All three green → PR. (The agent runs gates to know when it's done; the
 controller's run is the independent verification gating the PR.)
 
 **Repair pass (attempt 2):** same `--session-id` (resumes the session context)
-+ the failure output appended to the prompt.
+
+- the failure output appended to the prompt.
 
 **Logs:** JSON transcript per run → `handoff/logs/<repo>-<issue>-<attempt>.json`
 (for failure comments and debugging).
 
 ## Error handling & failure modes
 
-| # | Failure point | Behavior |
-|---|---|---|
-| 1 | Linear read fails (API down / bad key) | Abort run, non-zero exit, clear message. Nothing claimed. |
-| 2 | Pre-flight: repo dirty / wrong branch / missing `.env` | Skip that repo with a clear error — never clobber WIP. |
-| 3 | Claim fails (state transition error) | Log + skip that issue, continue the batch. |
-| 4 | pi crash / timeout / gates red (any red) | One repair pass (attempt 2, same session, failure appended). |
-| 5 | Still red after 2 attempts | Failure path: comment (attempted + which gate failed + plan, if any) · push partial branch (no PR) · return to `Todo`. |
-| 6 | PR create fails (gh error, bad token) | Comment failure + branch name (open manually); code done and pushed → leave `In Progress`. |
-| 7 | Write-back comment fails after PR | Non-fatal: PR exists; log + surface in summary. |
+| #   | Failure point                                          | Behavior                                                                                                               |
+| --- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | Linear read fails (API down / bad key)                 | Abort run, non-zero exit, clear message. Nothing claimed.                                                              |
+| 2   | Pre-flight: repo dirty / wrong branch / missing `.env` | Skip that repo with a clear error — never clobber WIP.                                                                 |
+| 3   | Claim fails (state transition error)                   | Log + skip that issue, continue the batch.                                                                             |
+| 4   | pi crash / timeout / gates red (any red)               | One repair pass (attempt 2, same session, failure appended).                                                           |
+| 5   | Still red after 2 attempts                             | Failure path: comment (attempted + which gate failed + plan, if any) · push partial branch (no PR) · return to `Todo`. |
+| 6   | PR create fails (gh error, bad token)                  | Comment failure + branch name (open manually); code done and pushed → leave `In Progress`.                             |
+| 7   | Write-back comment fails after PR                      | Non-fatal: PR exists; log + surface in summary.                                                                        |
 
 - **#4 treats timeout like any red** — one repair pass (also 15-min capped),
   then #5. `--thinking medium` + the label-gated queue keeps this rare.
@@ -243,7 +244,7 @@ controller's run is the independent verification gating the PR.)
 1. **Unit tests** (`node --test`, mocked `fetch`/`spawn`): config validation,
    the label/state filter construction, the exact `gh pr create` argv + env,
    the branch-slug generator, and the green/red/repair/failure decision logic.
-2. **`--dry-run` mode** — prints what it *would* do (claim, spawn, PR,
+2. **`--dry-run` mode** — prints what it _would_ do (claim, spawn, PR,
    comments) without doing any of it. First thing run against real Linear data.
 3. **End-to-end on a throwaway issue** — a real `SER-13` with a trivial change,
    labeled `handoff`, run the real loop, watch claim → implement → gates →

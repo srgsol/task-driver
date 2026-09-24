@@ -10,8 +10,8 @@ import { createLoop } from "./loop.mjs";
 import { runSync, runAsync } from "./sh.mjs";
 
 /**
- * task-driver CLI entrypoint: wires config, Linear, git, gates, gh, executor,
- * and the processing loop together, then runs it.
+ * Task-driver CLI entrypoint: wires config, Linear, git, gates, gh, executor, and the processing
+ * loop together, then runs it.
  */
 
 // `here` is src/; the project root is one level up.
@@ -21,8 +21,9 @@ const workRoot = join(root, "work");
 
 /**
  * Parse CLI arguments into a normalized options object.
+ *
  * @param {string[]} argv
- * @returns {{ dryRun: boolean, configPath: string }}
+ * @returns {{ dryRun: boolean; configPath: string }}
  */
 function parseArgs(argv) {
   const args = { dryRun: false, configPath: join(root, "task-driver.config.json") };
@@ -39,6 +40,7 @@ function parseArgs(argv) {
 
 /**
  * Build the loop from config + dependencies and run it for all repos.
+ *
  * @returns {Promise<void>}
  */
 async function main() {
@@ -71,7 +73,9 @@ async function main() {
   const prs = count("pr");
   const failed = count("failed");
   const other = results.length - prs - failed;
-  console.log(`\ntask-driver complete: ${prs} PR(s), ${failed} failure(s), ${other} skipped/other, ${results.length} total.`);
+  console.log(
+    `\ntask-driver complete: ${prs} PR(s), ${failed} failure(s), ${other} skipped/other, ${results.length} total.`,
+  );
   process.exit(failed > 0 ? 1 : 0);
 }
 

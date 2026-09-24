@@ -2,16 +2,26 @@ import { readFileSync, existsSync, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Agent execution: runs the headless `pi` process for one issue and reads the
- * implementation plan it wrote back to disk.
+ * Agent execution: runs the headless `pi` process for one issue and reads the implementation plan
+ * it wrote back to disk.
  */
 
 /**
- * @typedef {(cmd: string, args: string[], opts?: { cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number, onChunk?: (stream: "stdout" | "stderr", text: string) => void }) => Promise<{ exitCode: number | null, timedOut: boolean, stdout: string, stderr: string }>} RunAsync
+ * @typedef {(
+ *   cmd: string,
+ *   args: string[],
+ *   opts?: {
+ *     cwd?: string;
+ *     env?: NodeJS.ProcessEnv;
+ *     timeoutMs?: number;
+ *     onChunk?: (stream: "stdout" | "stderr", text: string) => void;
+ *   },
+ * ) => Promise<{ exitCode: number | null; timedOut: boolean; stdout: string; stderr: string }>} RunAsync
+ *
  * @typedef {object} RunAgentOptions
  * @property {string} repoPath
  * @property {string} sessionId
- * @property {{ thinking: string, timeoutMs: number }} config
+ * @property {{ thinking: string; timeoutMs: number }} config
  * @property {string} skillPath
  * @property {string} message
  * @property {string} workRoot
@@ -20,8 +30,13 @@ import { join } from "node:path";
 
 /**
  * Build an agent runner bound to a `runAsync` implementation.
+ *
  * @param {RunAsync} runAsync
- * @returns {{ runAgent(opts: RunAgentOptions): Promise<{ exitCode: number | null, timedOut: boolean, stdout: string, stderr: string }> }}
+ * @returns {{
+ *   runAgent(
+ *     opts: RunAgentOptions,
+ *   ): Promise<{ exitCode: number | null; timedOut: boolean; stdout: string; stderr: string }>;
+ * }}
  */
 export function createExecutor(runAsync) {
   function childEnv() {
@@ -37,18 +52,30 @@ export function createExecutor(runAsync) {
   return {
     /**
      * Run one headless `pi` agent invocation for an issue.
+     *
      * @param {RunAgentOptions} opts
-     * @returns {Promise<{ exitCode: number | null, timedOut: boolean, stdout: string, stderr: string }>}
+     * @returns {Promise<{
+     *   exitCode: number | null;
+     *   timedOut: boolean;
+     *   stdout: string;
+     *   stderr: string;
+     * }>}
      */
     async runAgent({ repoPath, sessionId, config, skillPath, message, workRoot, repoName }) {
       const args = [
-        "--print", "--mode", "json",
-        "--session-id", sessionId,
+        "--print",
+        "--mode",
+        "json",
+        "--session-id",
+        sessionId,
         "--approve",
         "--no-extensions",
-        "--skill", skillPath,
-        "--thinking", config.thinking,
-        "--", message,
+        "--skill",
+        skillPath,
+        "--thinking",
+        config.thinking,
+        "--",
+        message,
       ];
 
       // Persist the streamed transcript so a run can be watched live:
@@ -59,18 +86,32 @@ export function createExecutor(runAsync) {
         mkdirSync(logDir, { recursive: true });
         logPath = join(logDir, `${sessionId}.jsonl`);
         appendFileSync(logPath, `\n===== ${new Date().toISOString()} =====\n`);
-      } catch { logPath = undefined; }
+      } catch {
+        logPath = undefined;
+      }
       const onChunk = logPath
-        ? (/** @type {"stdout" | "stderr"} */ _stream, /** @type {string} */ text) => { try { appendFileSync(logPath, text); } catch { /* ignore */ } }
+        ? (/** @type {"stdout" | "stderr"} */ _stream, /** @type {string} */ text) => {
+            try {
+              appendFileSync(logPath, text);
+            } catch {
+              /* ignore */
+            }
+          }
         : undefined;
 
-      return runAsync("pi", args, { cwd: repoPath, env: childEnv(), timeoutMs: config.timeoutMs, onChunk });
+      return runAsync("pi", args, {
+        cwd: repoPath,
+        env: childEnv(),
+        timeoutMs: config.timeoutMs,
+        onChunk,
+      });
     },
   };
 }
 
 /**
  * Read the implementation plan an agent produced for an issue, if any.
+ *
  * @param {string} workRoot
  * @param {string} repoName
  * @param {string} identifier

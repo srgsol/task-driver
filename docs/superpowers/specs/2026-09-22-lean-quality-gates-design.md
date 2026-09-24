@@ -12,16 +12,16 @@ dependency audits, or e2e.
 
 ## Decisions made in this session
 
-| # | Decision | Choice |
-|---|----------|--------|
-| 1 | Scope | **Both** task-driver and driven repos |
-| 2 | Heaviness | **A — lean** (fast, deterministic only) |
-| 3 | Approach | **Canonical triad recommendation:** `test` · `tsc` · `lint` |
-| 4 | Source of truth | **Per-repo `gates[]` in `task-driver.config.json`** — not a hard platform rule |
-| 5 | task-driver typing | **Keep `.mjs`**; add `tsc --noEmit` via `allowJs` + `checkJs` (no tree migration) |
-| 6 | Format / coverage / audit / e2e | **Out of scope** this pass |
-| 7 | Gate runner (`src/gates.mjs`) | **Unchanged** — still runs declared commands; all must exit 0 |
-| 8 | tiktak gates | **No change** — already declares the triad |
+| #   | Decision                        | Choice                                                                            |
+| --- | ------------------------------- | --------------------------------------------------------------------------------- |
+| 1   | Scope                           | **Both** task-driver and driven repos                                             |
+| 2   | Heaviness                       | **A — lean** (fast, deterministic only)                                           |
+| 3   | Approach                        | **Canonical triad recommendation:** `test` · `tsc` · `lint`                       |
+| 4   | Source of truth                 | **Per-repo `gates[]` in `task-driver.config.json`** — not a hard platform rule    |
+| 5   | task-driver typing              | **Keep `.mjs`**; add `tsc --noEmit` via `allowJs` + `checkJs` (no tree migration) |
+| 6   | Format / coverage / audit / e2e | **Out of scope** this pass                                                        |
+| 7   | Gate runner (`src/gates.mjs`)   | **Unchanged** — still runs declared commands; all must exit 0                     |
+| 8   | tiktak gates                    | **No change** — already declares the triad                                        |
 
 ## Gate contract
 
@@ -38,11 +38,11 @@ dependency audits, or e2e.
 
 For repos that want a solid minimum, prefer this order and naming:
 
-| Name | Typical command | Role |
-|------|-----------------|------|
-| `test` | `npm test` | Behavior |
-| `tsc` | `npx tsc --noEmit` | Types |
-| `lint` | `npm run lint` | Static checks |
+| Name   | Typical command    | Role          |
+| ------ | ------------------ | ------------- |
+| `test` | `npm test`         | Behavior      |
+| `tsc`  | `npx tsc --noEmit` | Types         |
+| `lint` | `npm run lint`     | Static checks |
 
 Names in config should match what humans and agents see in prompts; command
 forms may use `npm run typecheck` instead of `npx tsc --noEmit` if the script

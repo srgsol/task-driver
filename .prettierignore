@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.*
+work/
+package-lock.json
+.pytest_cache/
+.superpowers/

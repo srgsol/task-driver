@@ -16,8 +16,13 @@ test("runAgent strips Linear and GitHub tokens from child env", async () => {
   process.env.GH_TOKEN = "x";
   process.env.LINEAR_API_KEY = "y";
   const r = await executor.runAgent({
-    repoPath: "/r", sessionId: "s", config: { thinking: "medium", timeoutMs: 1000 },
-    skillPath: "/sk.md", message: "do it", workRoot: "/w", repoName: "tiktak",
+    repoPath: "/r",
+    sessionId: "s",
+    config: { thinking: "medium", timeoutMs: 1000 },
+    skillPath: "/sk.md",
+    message: "do it",
+    workRoot: "/w",
+    repoName: "tiktak",
   });
   assert.equal(r.exitCode, 0);
   assert.equal(seenEnv.GH_TOKEN, undefined);
@@ -37,10 +42,18 @@ test("runAgent streams output to work/<repo>/logs", async () => {
     return { exitCode: 0, timedOut: false, stdout: "hello-log", stderr: "" };
   });
   await executor.runAgent({
-    repoPath: "/r", sessionId: "task-driver-tiktak-SER-9", config: { thinking: "medium", timeoutMs: 1000 },
-    skillPath: "/sk.md", message: "m", workRoot, repoName: "tiktak",
+    repoPath: "/r",
+    sessionId: "task-driver-tiktak-SER-9",
+    config: { thinking: "medium", timeoutMs: 1000 },
+    skillPath: "/sk.md",
+    message: "m",
+    workRoot,
+    repoName: "tiktak",
   });
-  const log = readFileSync(join(workRoot, "tiktak", "logs", "task-driver-tiktak-SER-9.jsonl"), "utf8");
+  const log = readFileSync(
+    join(workRoot, "tiktak", "logs", "task-driver-tiktak-SER-9.jsonl"),
+    "utf8",
+  );
   assert.match(log, /hello-log/);
 });
 
