@@ -50,11 +50,9 @@ test("loadConfig reads and validates a file", () => {
   assert.equal(c.repos[0].project, "tik-tak");
 });
 
-test("validateConfig rejects omitted gates", () => {
-  assert.throws(
-    () => validateConfig({ repos: [repo({ gates: undefined })] }),
-    /gates must be a non-empty array/,
-  );
+test("validateConfig defaults omitted gates to an empty array", () => {
+  const c = validateConfig({ repos: [repo({ gates: undefined })] });
+  assert.deepEqual(c.repos[0].gates, []);
 });
 
 test("validateConfig keeps explicit gates", () => {
@@ -63,10 +61,15 @@ test("validateConfig keeps explicit gates", () => {
   assert.equal(c.repos[0].gates, gates);
 });
 
-test("validateConfig rejects empty gates", () => {
+test("validateConfig allows empty gates", () => {
+  const c = validateConfig({ repos: [repo({ gates: [] })] });
+  assert.deepEqual(c.repos[0].gates, []);
+});
+
+test("validateConfig rejects non-array gates", () => {
   assert.throws(
-    () => validateConfig({ repos: [repo({ gates: [] })] }),
-    /gates must be a non-empty array/,
+    () => validateConfig({ repos: [repo({ gates: "npm test" })] }),
+    /gates must be an array/,
   );
 });
 

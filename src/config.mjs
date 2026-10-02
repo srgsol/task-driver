@@ -36,8 +36,8 @@ export function validateConfig(raw) {
     if (!r.name || !r.path || !r.team || !r.project || !r.remote) {
       throw new Error(`config.repos[${i}] must define name, path, team, project, remote`);
     }
-    if (!Array.isArray(r.gates) || r.gates.length === 0) {
-      throw new Error(`config.repos[${i}].gates must be a non-empty array`);
+    if (r.gates !== undefined && !Array.isArray(r.gates)) {
+      throw new Error(`config.repos[${i}].gates must be an array`);
     }
     return {
       name: r.name,
@@ -45,7 +45,7 @@ export function validateConfig(raw) {
       team: r.team,
       project: r.project,
       remote: r.remote,
-      gates: r.gates,
+      gates: r.gates ?? [],
     };
   });
   const attempts = raw.attempts ?? DEFAULTS.attempts;

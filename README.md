@@ -97,18 +97,20 @@ package.json
 | `repos[].team`    | Linear team key to poll                                                                                                                      |
 | `repos[].project` | Linear project name to poll (exact match). Each repo routes only issues in this project.                                                     |
 | `repos[].remote`  | Informational (push uses the checkout's own remote)                                                                                          |
-| `repos[].gates`   | Required; the full list of gates to run. List every gate the repo has, including `test`, since there is no default set. See [Gates](#gates). |
+| `repos[].gates`   | Optional; the full list of gates to run. List every gate the repo has, including `test`, since there is no default set. Omit (or set `[]`) for a repo with no automated gates. See [Gates](#gates). |
 | `attempts`        | Max `pi` runs per issue (1 = no repair pass)                                                                                                 |
 | `timeoutMs`       | Wall-clock cap per `pi` run (`900000` = 15 min)                                                                                              |
 | `thinking`        | `pi --thinking` level (`off`…`max`)                                                                                                          |
 
 ### Gates
 
-Every repo must declare its gates explicitly in `task-driver.config.json`.
+Every repo declares its gates explicitly in `task-driver.config.json`.
 
 There is no global default gate set. The lean recommendation for repos that
 want a solid minimum is `test` · `tsc` · `lint`, but each repo lists exactly
-what the controller should run.
+what the controller should run. A repo with no automated verification may set
+`gates` to `[]` (or omit the key) — the controller then skips gate checks for
+it.
 
 ```json
 {
@@ -154,7 +156,8 @@ To bring a new repository under the controller, do the following:
    project**).
 5. **Add an entry** to `repos` in `task-driver.config.json`. `path` is resolved
    relative to this config file. Declare every gate the repo has in `gates`
-   (there is no default set — see [Gates](#gates)):
+   (there is no default set — see [Gates](#gates)); set `gates` to `[]` (or omit
+   it) if the repo has none:
 
 ```json
 {
