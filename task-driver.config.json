@@ -23,6 +23,14 @@
         { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
         { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
       ]
+    },
+    {
+      "name": "mermaid-editor",
+      "path": "../mermaid-editor",
+      "team": "SER",
+      "project": "mermaid-editor",
+      "remote": "git@github.com:srgsol/mermaid-editor.git",
+      "gates": []
     }
   ],
   "attempts": 2,
