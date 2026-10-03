@@ -81,6 +81,7 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  *   body: string;
  * }) => { url: string; number: number }} createPR
  *
+ *
  * @typedef {object} Executor
  * @property {(opts: {
  *   repoPath: string;
@@ -91,6 +92,7 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  *   workRoot: string;
  *   repoName: string;
  * }) => Promise<RunResult>} runAgent
+ *
  *
  * @typedef {object} LoopDeps
  * @property {Config} config
@@ -217,6 +219,22 @@ export function createLoop({
   }
 
   /**
+   * Run a cleanup/notification step, logging (but not propagating) failures so that a single
+   * git/Linear hiccup can't abort the rest of the run.
+   *
+   * @param {string} label
+   * @param {() => void | Promise<void>} action
+   */
+  async function bestEffort(label, action) {
+    try {
+      await action();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log(`  ⚠️  ${label} (${message})`);
+    }
+  }
+
+  /**
    * @param {RepoConfig} repo
    * @param {Issue} issue
    * @param {boolean} dryRun
@@ -248,8 +266,14 @@ export function createLoop({
     }
 
     log(`→ ${issue.identifier}: ${issue.title} (${branch})`);
-    git.checkout(repo.path, BASE_BRANCH);
-    git.createBranch(repo.path, branch);
+    try {
+      git.checkout(repo.path, BASE_BRANCH);
+      git.createBranch(repo.path, branch);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log(`  ⚠️  ${issue.identifier}: could not set up branch (${message}) — skipping`);
+      return { identifier: issue.identifier, outcome: "skipped" };
+    }
     log(`  watch: tail -f ${logPath}`);
 
     const first = await executor.runAgent({
@@ -314,16 +338,22 @@ export function createLoop({
         });
         await linear.comment(issue.id, `✅ PR opened: ${pr.url}\n\n${gatesSummary(v.gatesResult)}`);
         log(`  ✅ ${issue.identifier}: PR ${pr.url} (${branch})`);
-        git.checkout(repo.path, BASE_BRANCH);
+        await bestEffort(`${issue.identifier}: could not return to ${BASE_BRANCH}`, () =>
+          git.checkout(repo.path, BASE_BRANCH),
+        );
         return { identifier: issue.identifier, outcome: "pr" };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log(`  ⚠️  ${issue.identifier}: PR create failed: ${message}`);
-        await linear.comment(
-          issue.id,
-          `⚠️ task-driver: code done and pushed on \`${branch}\`, but PR creation failed: ${message}`,
+        await bestEffort(`${issue.identifier}: could not post PR-failure note`, () =>
+          linear.comment(
+            issue.id,
+            `⚠️ task-driver: code done and pushed on \`${branch}\`, but PR creation failed: ${message}`,
+          ),
         );
-        git.checkout(repo.path, BASE_BRANCH);
+        await bestEffort(`${issue.identifier}: could not return to ${BASE_BRANCH}`, () =>
+          git.checkout(repo.path, BASE_BRANCH),
+        );
         return { identifier: issue.identifier, outcome: "pr-failed" };
       }
     }
@@ -344,10 +374,16 @@ export function createLoop({
     } catch {
       /* ignore */
     }
-    await linear.comment(issue.id, note);
-    await linear.moveState(issue.id, "Todo");
+    await bestEffort(`${issue.identifier}: could not post failure note`, () =>
+      linear.comment(issue.id, note),
+    );
+    await bestEffort(`${issue.identifier}: could not move back to Todo`, () =>
+      linear.moveState(issue.id, "Todo"),
+    );
     log(`  ❌ ${issue.identifier}: failed (branch ${branch} pushed, no PR)`);
-    git.checkout(repo.path, BASE_BRANCH);
+    await bestEffort(`${issue.identifier}: could not return to ${BASE_BRANCH}`, () =>
+      git.checkout(repo.path, BASE_BRANCH),
+    );
     return { identifier: issue.identifier, outcome: "failed" };
   }
 
