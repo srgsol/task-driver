@@ -87,3 +87,14 @@ test("unrelated labels are ignored", () => {
   assert.equal(r.model, undefined);
   assert.equal(r.thinking, "medium");
 });
+
+test("an alias naming an inherited Object property is an unknown alias, not a match", () => {
+  for (const alias of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
+    const m = resolveAgentParams([`model-${alias}`], config);
+    assert.equal(m.ok, false);
+    assert.match(m.error, /unknown model alias/);
+    const e = resolveAgentParams([`effort-${alias}`], config);
+    assert.equal(e.ok, false);
+    assert.match(e.error, /unknown effort alias/);
+  }
+});

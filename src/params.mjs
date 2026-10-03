@@ -54,18 +54,26 @@ export function resolveAgentParams(labels, config) {
   const modelAlias = modelAliases[0];
   const effortAlias = effortAliases[0];
 
+  /** @type {Record<string, string>} */
+  const models = config.models ?? {};
+  /** @type {Record<string, string>} */
+  const efforts = config.efforts ?? {};
+
   /** @type {string | undefined} */
   let model;
   if (modelAlias !== undefined) {
-    model = config.models?.[modelAlias];
-    if (model === undefined) return { ok: false, error: `unknown model alias "${modelAlias}"` };
+    if (!Object.hasOwn(models, modelAlias)) {
+      return { ok: false, error: `unknown model alias "${modelAlias}"` };
+    }
+    model = models[modelAlias];
   }
 
   let thinking = config.thinking;
   if (effortAlias !== undefined) {
-    const level = config.efforts?.[effortAlias];
-    if (level === undefined) return { ok: false, error: `unknown effort alias "${effortAlias}"` };
-    thinking = level;
+    if (!Object.hasOwn(efforts, effortAlias)) {
+      return { ok: false, error: `unknown effort alias "${effortAlias}"` };
+    }
+    thinking = efforts[effortAlias];
   }
 
   return { ok: true, model, thinking, modelAlias, effortAlias };
