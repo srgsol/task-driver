@@ -147,6 +147,9 @@ unchanged.
 
 - Dry run: per-issue resolved `model` / `thinking` (or `config-error`).
 - Claim comment: `(model …, effort …)` when set.
+- Run-parameters comment: the resolved model id + thinking level (with the alias
+  or default each came from) posted on the issue right after claiming, so the
+  record survives later removal of the labels.
 - PR body: unchanged (model/effort are run-time choices, not repo facts).
 - Logs: the resolved values are already visible in the `pi` invocation and the
   dry-run/claim lines.

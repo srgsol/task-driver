@@ -307,6 +307,19 @@ export function createLoop({
       return { identifier: issue.identifier, outcome: "skipped" };
     }
 
+    // Persist the resolved model/effort on the issue itself, so the record survives later label removal.
+    const paramSummary = [
+      `model \`${params.model ?? "pi default"}\`${
+        params.modelAlias ? ` (label \`model-${params.modelAlias}\`)` : ""
+      }`,
+      `effort \`${params.thinking}\`${
+        params.effortAlias ? ` (label \`effort-${params.effortAlias}\`)` : " (global default)"
+      }`,
+    ].join(", ");
+    await bestEffort(`${issue.identifier}: could not post run-parameters comment`, () =>
+      linear.comment(issue.id, `⚙️ task-driver run parameters — ${paramSummary}`),
+    );
+
     log(`→ ${issue.identifier}: ${issue.title} (${branch})`);
     try {
       git.checkout(repo.path, BASE_BRANCH);

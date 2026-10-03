@@ -127,6 +127,10 @@ error, adds the `ai:error` label, and moves the issue to `Backlog` so it stays o
 of the pick list until a human fixes the label or the config. A bad model ID that
 is configured but not installed by pi surfaces as an ordinary failed agent run.
 
+After claiming, task-driver posts a `run parameters` comment with the resolved
+model id and thinking level (and the alias or default each came from), so the
+record survives later removal of the labels.
+
 ### Gates
 
 Every repo declares its gates explicitly in `task-driver.config.json`.

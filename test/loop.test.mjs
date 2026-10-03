@@ -104,7 +104,7 @@ test("happy path: claim, branch, PR, comment, back to master", async () => {
   assert.deepEqual(calls.createBranch[0], ["/r", "SER-9-fix-drag"]);
   assert.equal(calls.runAgent.length, 1);
   assert.equal(calls.createPR[0].head, "SER-9-fix-drag");
-  assert.match(calls.comments[1][1], /PR opened/);
+  assert.ok(calls.comments.some(([, body]) => /PR opened/.test(body)));
   assert.equal(calls.checkout.length, 2);
 });
 
@@ -443,4 +443,38 @@ test("dry-run flags a config-error without mutating", async () => {
   assert.equal(results[0].outcome, "config-error");
   assert.equal(calls.moveState.length, 0);
   assert.equal(calls.addLabel.length, 0);
+});
+
+test("posts a run-parameters comment with the resolved model and effort", async () => {
+  const { loop, calls } = makeDeps({
+    models: { fast: "openai/gpt-4o-mini" },
+    efforts: { high: "high" },
+    issues: [
+      {
+        id: "i1",
+        identifier: "SER-9",
+        title: "t",
+        description: "",
+        url: "u",
+        labels: ["model-fast", "effort-high"],
+      },
+    ],
+  });
+  await loop(false);
+  const runParams = calls.comments.map(([, body]) => body).find((b) => /run parameters/.test(b));
+  assert.ok(runParams, "expected a run-parameters comment");
+  assert.match(runParams, /openai\/gpt-4o-mini/);
+  assert.match(runParams, /model-fast/);
+  assert.match(runParams, /`high`/);
+  assert.match(runParams, /effort-high/);
+});
+
+test("run-parameters comment records defaults when no labels are set", async () => {
+  const { loop, calls } = makeDeps();
+  await loop(false);
+  const runParams = calls.comments.map(([, body]) => body).find((b) => /run parameters/.test(b));
+  assert.ok(runParams, "expected a run-parameters comment");
+  assert.match(runParams, /pi default/);
+  assert.match(runParams, /medium/);
+  assert.match(runParams, /global default/);
 });
