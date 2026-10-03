@@ -40,6 +40,43 @@ test("runGates runs the repo's configured gates", () => {
   ]);
 });
 
+test("runGates applies a positive default gate timeout", () => {
+  const seen = [];
+  const g = createGates((cmd, args, opts) => {
+    seen.push(opts.timeoutMs);
+    return { status: 0, stdout: "", stderr: "" };
+  });
+  g.runGates({ path: "/r", gates: [gates[0]] });
+  assert.ok(seen[0] > 0, "a positive default timeout is applied");
+});
+
+test("runGates passes a custom gate timeout to runSync", () => {
+  const seen = [];
+  const g = createGates(
+    (cmd, args, opts) => {
+      seen.push(opts.timeoutMs);
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    { timeoutMs: 1234 },
+  );
+  g.runGates({ path: "/r", gates: [gates[0]] });
+  assert.deepEqual(seen, [1234]);
+});
+
+test("runGates marks a timed-out gate failed", () => {
+  const g = createGates(() => ({
+    status: 1,
+    stdout: "partial output",
+    stderr: "timed out after 5ms",
+    timedOut: true,
+  }));
+  const r = g.runGates({ path: "/r", gates: [gates[0]] });
+  assert.equal(r.green, false);
+  assert.equal(r.results[0].passed, false);
+  assert.equal(r.results[0].timedOut, true);
+  assert.match(r.results[0].output, /timed out/);
+});
+
 test("runGates honours a custom gate list", () => {
   const seen = [];
   const g = createGates((cmd, args) => {

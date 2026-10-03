@@ -6,9 +6,15 @@ import { spawn, spawnSync } from "node:child_process";
  */
 
 /**
- * @typedef {{ status: number; stdout: string; stderr: string }} SyncRunResult
+ * @typedef {{ status: number; stdout: string; stderr: string; timedOut: boolean }} SyncRunResult
  *
- * @typedef {{ cwd?: string; env?: NodeJS.ProcessEnv; input?: string }} SyncRunOptions
+ * @typedef {{
+ *   cwd?: string;
+ *   env?: NodeJS.ProcessEnv;
+ *   input?: string;
+ *   timeoutMs?: number;
+ * }} SyncRunOptions
+ *
  *
  * @typedef {{
  *   cwd?: string;
@@ -16,6 +22,7 @@ import { spawn, spawnSync } from "node:child_process";
  *   timeoutMs?: number;
  *   onChunk?: (stream: "stdout" | "stderr", text: string) => void;
  * }} AsyncRunOptions
+ *
  *
  * @typedef {{ exitCode: number | null; timedOut: boolean; stdout: string; stderr: string }} AsyncRunResult
  */
@@ -28,9 +35,22 @@ import { spawn, spawnSync } from "node:child_process";
  * @param {SyncRunOptions} [opts]
  * @returns {SyncRunResult}
  */
-export function runSync(cmd, args, { cwd, env, input } = {}) {
-  const res = spawnSync(cmd, args, { cwd, env: env ?? process.env, input, encoding: "utf8" });
-  return { status: res.status ?? 1, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+export function runSync(cmd, args, { cwd, env, input, timeoutMs } = {}) {
+  const res = spawnSync(cmd, args, {
+    cwd,
+    env: env ?? process.env,
+    input,
+    encoding: "utf8",
+    timeout: timeoutMs,
+  });
+  // `spawnSync` kills the child and sets `error.code = "ETIMEDOUT"` when the
+  // timeout elapses, leaving `status` null. Surface that explicitly so callers
+  // (gates) can report *why* a command failed instead of a bare exit code.
+  const spawnErr = /** @type {NodeJS.ErrnoException | undefined} */ (res.error);
+  const timedOut = spawnErr?.code === "ETIMEDOUT";
+  const errMsg = res.error ? (timedOut ? `timed out after ${timeoutMs}ms` : res.error.message) : "";
+  const stderr = [res.stderr ?? "", errMsg].filter(Boolean).join("\n");
+  return { status: res.status ?? 1, stdout: res.stdout ?? "", stderr, timedOut };
 }
 
 /**

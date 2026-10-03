@@ -86,21 +86,23 @@ package.json
   ],
   "attempts": 2,
   "timeoutMs": 900000,
+  "gateTimeoutMs": 300000,
   "thinking": "medium"
 }
 ```
 
-| Key               | Meaning                                                                                                                                      |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `repos[].name`    | Label used in session ids, log names, and messages                                                                                           |
-| `repos[].path`    | Checkout location, relative to this config file                                                                                              |
-| `repos[].team`    | Linear team key to poll                                                                                                                      |
-| `repos[].project` | Linear project name to poll (exact match). Each repo routes only issues in this project.                                                     |
-| `repos[].remote`  | Informational (push uses the checkout's own remote)                                                                                          |
+| Key               | Meaning                                                                                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repos[].name`    | Label used in session ids, log names, and messages                                                                                                                                                  |
+| `repos[].path`    | Checkout location, relative to this config file                                                                                                                                                     |
+| `repos[].team`    | Linear team key to poll                                                                                                                                                                             |
+| `repos[].project` | Linear project name to poll (exact match). Each repo routes only issues in this project.                                                                                                            |
+| `repos[].remote`  | Informational (push uses the checkout's own remote)                                                                                                                                                 |
 | `repos[].gates`   | Optional; the full list of gates to run. List every gate the repo has, including `test`, since there is no default set. Omit (or set `[]`) for a repo with no automated gates. See [Gates](#gates). |
-| `attempts`        | Max `pi` runs per issue (1 = no repair pass)                                                                                                 |
-| `timeoutMs`       | Wall-clock cap per `pi` run (`900000` = 15 min)                                                                                              |
-| `thinking`        | `pi --thinking` level (`off`…`max`)                                                                                                          |
+| `attempts`        | Max `pi` runs per issue (1 = no repair pass)                                                                                                                                                        |
+| `timeoutMs`       | Wall-clock cap per `pi` run (`900000` = 15 min)                                                                                                                                                     |
+| `gateTimeoutMs`   | Wall-clock cap per gate command (`300000` = 5 min); a hung gate is killed and reported as failed                                                                                                    |
+| `thinking`        | `pi --thinking` level (`off`…`max`)                                                                                                                                                                 |
 
 ### Gates
 

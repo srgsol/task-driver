@@ -35,5 +35,6 @@
   ],
   "attempts": 2,
   "timeoutMs": 900000,
+  "gateTimeoutMs": 300000,
   "thinking": "medium"
 }

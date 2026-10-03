@@ -26,6 +26,22 @@ test("validateConfig applies defaults", () => {
   assert.equal(c.repos[0].project, "tik-tak");
 });
 
+test("validateConfig defaults gateTimeoutMs to a positive integer", () => {
+  const c = validateConfig({ repos: [repo()] });
+  assert.ok(Number.isInteger(c.gateTimeoutMs) && c.gateTimeoutMs > 0);
+});
+
+test("validateConfig rejects an invalid gateTimeoutMs", () => {
+  assert.throws(
+    () => validateConfig({ repos: [repo()], gateTimeoutMs: 0 }),
+    /gateTimeoutMs must be an integer >= 1/,
+  );
+  assert.throws(
+    () => validateConfig({ repos: [repo()], gateTimeoutMs: 1.5 }),
+    /gateTimeoutMs must be an integer >= 1/,
+  );
+});
+
 test("validateConfig rejects empty repos", () => {
   assert.throws(() => validateConfig({ repos: [] }), /non-empty/);
 });
