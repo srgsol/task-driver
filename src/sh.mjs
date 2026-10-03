@@ -65,10 +65,13 @@ export function runAsync(cmd, args, { cwd, env, timeoutMs, onChunk } = {}) {
   return new Promise((resolve) => {
     // stdin MUST be closed ("ignore" -> /dev/null): pi treats an open, non-TTY
     // stdin as piped input and waits forever for EOF that never arrives.
+    // `detached: true` makes the child a process-group leader on POSIX so the
+    // timeout below can signal the whole group (pi's grandchildren included).
     const child = spawn(cmd, args, {
       cwd,
       env: env ?? process.env,
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
     });
     let stdout = "";
     let stderr = "";
@@ -86,6 +89,18 @@ export function runAsync(cmd, args, { cwd, env, timeoutMs, onChunk } = {}) {
     if (timeoutMs) {
       timer = setTimeout(() => {
         timedOut = true;
+        const pid = child.pid;
+        if (pid !== undefined) {
+          try {
+            // Negative pid targets the whole process group, so pi's
+            // grandchildren (npm, git, tsc, the agent work) die too rather
+            // than being orphaned and running on after the timeout.
+            process.kill(-pid, "SIGKILL");
+            return;
+          } catch {
+            // The group may already be gone; fall back to the direct child.
+          }
+        }
         child.kill("SIGKILL");
       }, timeoutMs);
     }
