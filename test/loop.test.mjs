@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createLoop, upsertPlanSection } from "../src/loop.mjs";
+import { createLoop, formatPlanComment } from "../src/loop.mjs";
 
 function makeDeps(opts = {}) {
   const calls = {
@@ -172,17 +172,19 @@ test("dry-run makes no mutations", async () => {
   assert.equal(calls.createPR.length, 0);
 });
 
-test("writes the plan into the issue description on success", async () => {
+test("posts the plan as a comment on success", async () => {
   const { loop, calls } = makeDeps({ readPlan: () => "# plan" });
   const results = await loop(false);
   assert.equal(results[0].outcome, "pr");
-  assert.equal(calls.updateDescription.length, 1);
-  assert.equal(calls.updateDescription[0][0], "i1");
-  assert.match(calls.updateDescription[0][1], /## Implementation Plan/);
-  assert.match(calls.updateDescription[0][1], /# plan/);
+  assert.equal(calls.updateDescription.length, 0);
+  const planComment = calls.comments
+    .map(([, b]) => b)
+    .find((b) => /## Implementation Plan/.test(b));
+  assert.ok(planComment, "expected a plan comment");
+  assert.match(planComment, /# plan/);
 });
 
-test("writes the plan into the issue description on failure too", async () => {
+test("posts the plan as a comment on failure too", async () => {
   const { loop, calls } = makeDeps({
     readPlan: () => "# plan",
     agentResults: [
@@ -195,25 +197,24 @@ test("writes the plan into the issue description on failure too", async () => {
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "failed");
-  assert.equal(calls.updateDescription.length, 1);
+  assert.equal(calls.updateDescription.length, 0);
+  const planComment = calls.comments
+    .map(([, b]) => b)
+    .find((b) => /## Implementation Plan/.test(b));
+  assert.ok(planComment, "expected a plan comment");
+  assert.match(planComment, /# plan/);
 });
 
-test("skips the write-back when no plan was produced", async () => {
+test("skips the plan comment when no plan was produced", async () => {
   const { loop, calls } = makeDeps({ readPlan: () => null });
   const results = await loop(false);
   assert.equal(results[0].outcome, "pr");
   assert.equal(calls.updateDescription.length, 0);
+  assert.ok(!calls.comments.some(([, b]) => /## Implementation Plan/.test(b)));
 });
 
-test("upsertPlanSection appends and is idempotent", () => {
-  const once = upsertPlanSection("", "# plan");
-  assert.match(once, /## Implementation Plan/);
-  assert.match(once, /# plan/);
-  const twice = upsertPlanSection(once, "# new plan");
-  assert.equal((twice.match(/## Implementation Plan/g) ?? []).length, 1);
-  assert.match(twice, /# new plan/);
-  assert.doesNotMatch(twice, /# plan\n/);
-  assert.match(upsertPlanSection("Original text", "# plan"), /Original text/);
+test("formatPlanComment puts the plan under an Implementation Plan heading", () => {
+  assert.equal(formatPlanComment("# plan\n"), "## Implementation Plan\n\n# plan");
 });
 
 test("agent message includes the plan path and gates", async () => {
