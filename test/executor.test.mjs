@@ -69,3 +69,44 @@ test("readPlan reads the plan file from work/<repo>/plans", () => {
   writeFileSync(join(plans, "SER-9.md"), "# plan");
   assert.equal(readPlan(workRoot, "tiktak", "SER-9"), "# plan");
 });
+
+test("runAgent passes --model and an explicit thinking level", async () => {
+  let args;
+  const executor = createExecutor(async (_cmd, a) => {
+    args = a;
+    return { exitCode: 0, timedOut: false, stdout: "", stderr: "" };
+  });
+  await executor.runAgent({
+    repoPath: "/r",
+    sessionId: "s",
+    config: { thinking: "medium", timeoutMs: 1000 },
+    skillPath: "/sk.md",
+    message: "m",
+    workRoot: "/w",
+    repoName: "tiktak",
+    model: "anthropic/claude-sonnet-4.5",
+    thinking: "high",
+  });
+  const i = args.indexOf("--model");
+  assert.equal(args[i + 1], "anthropic/claude-sonnet-4.5");
+  assert.equal(args[args.indexOf("--thinking") + 1], "high");
+});
+
+test("runAgent omits --model and falls back to config.thinking", async () => {
+  let args;
+  const executor = createExecutor(async (_cmd, a) => {
+    args = a;
+    return { exitCode: 0, timedOut: false, stdout: "", stderr: "" };
+  });
+  await executor.runAgent({
+    repoPath: "/r",
+    sessionId: "s",
+    config: { thinking: "medium", timeoutMs: 1000 },
+    skillPath: "/sk.md",
+    message: "m",
+    workRoot: "/w",
+    repoName: "tiktak",
+  });
+  assert.equal(args.includes("--model"), false);
+  assert.equal(args[args.indexOf("--thinking") + 1], "medium");
+});

@@ -18,6 +18,7 @@ import { join } from "node:path";
  *   },
  * ) => Promise<{ exitCode: number | null; timedOut: boolean; stdout: string; stderr: string }>} RunAsync
  *
+ *
  * @typedef {object} RunAgentOptions
  * @property {string} repoPath
  * @property {string} sessionId
@@ -26,6 +27,8 @@ import { join } from "node:path";
  * @property {string} message
  * @property {string} workRoot
  * @property {string} repoName
+ * @property {string} [model] Optional `pi --model` pattern; omitted when absent.
+ * @property {string} [thinking] Overrides `config.thinking` when set.
  */
 
 /**
@@ -61,7 +64,18 @@ export function createExecutor(runAsync) {
      *   stderr: string;
      * }>}
      */
-    async runAgent({ repoPath, sessionId, config, skillPath, message, workRoot, repoName }) {
+    async runAgent({
+      repoPath,
+      sessionId,
+      config,
+      skillPath,
+      message,
+      workRoot,
+      repoName,
+      model,
+      thinking,
+    }) {
+      /** @type {string[]} */
       const args = [
         "--print",
         "--mode",
@@ -72,11 +86,9 @@ export function createExecutor(runAsync) {
         "--no-extensions",
         "--skill",
         skillPath,
-        "--thinking",
-        config.thinking,
-        "--",
-        message,
       ];
+      if (model) args.push("--model", model);
+      args.push("--thinking", thinking ?? config.thinking, "--", message);
 
       // Persist the streamed transcript so a run can be watched live:
       //   tail -f work/<repo>/logs/<sessionId>.jsonl
