@@ -3,6 +3,9 @@ import { dirname, resolve } from "node:path";
 
 /** Config loading and validation for `task-driver.config.json`. */
 
+/** Accepted `pi --thinking` levels for `config.efforts`. */
+export const EFFORT_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
 /** Defaults applied when the config file omits top-level tunables. */
 export const DEFAULTS = {
   attempts: 2,
@@ -30,6 +33,8 @@ export const DEFAULTS = {
  *   timeoutMs: number;
  *   gateTimeoutMs: number;
  *   thinking: string;
+ *   models: Record<string, string>;
+ *   efforts: Record<string, string>;
  * }} Config
  */
 
@@ -70,7 +75,25 @@ export function validateConfig(raw) {
     throw new Error("config.timeoutMs must be an integer >= 1");
   if (!Number.isInteger(gateTimeoutMs) || gateTimeoutMs < 1)
     throw new Error("config.gateTimeoutMs must be an integer >= 1");
-  return { repos, attempts, timeoutMs, gateTimeoutMs, thinking };
+  const models = raw.models ?? {};
+  if (typeof models !== "object" || models === null || Array.isArray(models)) {
+    throw new Error("config.models must be an object");
+  }
+  for (const [alias, id] of Object.entries(models)) {
+    if (typeof id !== "string" || id.trim() === "") {
+      throw new Error(`config.models.${alias} must be a non-empty string`);
+    }
+  }
+  const efforts = raw.efforts ?? {};
+  if (typeof efforts !== "object" || efforts === null || Array.isArray(efforts)) {
+    throw new Error("config.efforts must be an object");
+  }
+  for (const [alias, level] of Object.entries(efforts)) {
+    if (typeof level !== "string" || !EFFORT_LEVELS.includes(level)) {
+      throw new Error(`config.efforts.${alias} must be one of ${EFFORT_LEVELS.join("|")}`);
+    }
+  }
+  return { repos, attempts, timeoutMs, gateTimeoutMs, thinking, models, efforts };
 }
 
 /**

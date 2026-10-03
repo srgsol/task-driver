@@ -112,3 +112,42 @@ test("task-driver repo declares test, tsc, and lint gates", () => {
     { name: "lint", cmd: "npm", args: ["run", "lint"] },
   ]);
 });
+
+test("validateConfig defaults models and efforts to empty objects", () => {
+  const c = validateConfig({ repos: [repo()] });
+  assert.deepEqual(c.models, {});
+  assert.deepEqual(c.efforts, {});
+});
+
+test("validateConfig keeps explicit models and efforts", () => {
+  const c = validateConfig({
+    repos: [repo()],
+    models: { fast: "openai/gpt-4o-mini" },
+    efforts: { high: "high" },
+  });
+  assert.deepEqual(c.models, { fast: "openai/gpt-4o-mini" });
+  assert.deepEqual(c.efforts, { high: "high" });
+});
+
+test("validateConfig rejects a non-string or empty model", () => {
+  assert.throws(() => validateConfig({ repos: [repo()], models: { fast: 1 } }), /models\.fast/);
+  assert.throws(() => validateConfig({ repos: [repo()], models: { fast: "  " } }), /models\.fast/);
+});
+
+test("validateConfig rejects a non-object models map", () => {
+  assert.throws(() => validateConfig({ repos: [repo()], models: [] }), /models must be an object/);
+});
+
+test("validateConfig rejects an unknown effort level", () => {
+  assert.throws(
+    () => validateConfig({ repos: [repo()], efforts: { high: "extreme" } }),
+    /efforts\.high/,
+  );
+});
+
+test("validateConfig rejects a non-object efforts map", () => {
+  assert.throws(
+    () => validateConfig({ repos: [repo()], efforts: ["high"] }),
+    /efforts must be an object/,
+  );
+});

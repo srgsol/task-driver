@@ -87,7 +87,9 @@ package.json
   "attempts": 2,
   "timeoutMs": 900000,
   "gateTimeoutMs": 300000,
-  "thinking": "medium"
+  "thinking": "medium",
+  "models": { "fast": "openai/gpt-4o-mini", "sonnet-4.5": "anthropic/claude-sonnet-4.5" },
+  "efforts": { "low": "low", "high": "high" }
 }
 ```
 
@@ -103,6 +105,8 @@ package.json
 | `timeoutMs`       | Wall-clock cap per `pi` run (`900000` = 15 min)                                                                                                                                                     |
 | `gateTimeoutMs`   | Wall-clock cap per gate command (`300000` = 5 min); a hung gate is killed and reported as failed                                                                                                    |
 | `thinking`        | `pi --thinking` level (`off`…`max`)                                                                                                                                                                 |
+| `models`          | Optional alias → `pi --model` pattern map, e.g. `{ "fast": "openai/gpt-4o-mini" }`. Referenced by `model-<alias>` labels.                                                                           |
+| `efforts`         | Optional alias → `pi --thinking` level map (`off`…`max`). Referenced by `effort-<alias>` labels.                                                                                                    |
 
 ### Gates
 
