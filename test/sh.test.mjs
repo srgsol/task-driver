@@ -12,6 +12,17 @@ test("runSync captures non-zero status", () => {
   assert.equal(runSync("node", ["-e", "process.exit(7)"]).status, 7);
 });
 
+test("runSync reports timedOut false for a normal command", () => {
+  assert.equal(runSync("node", ["-e", "process.stdout.write('ok')"]).timedOut, false);
+});
+
+test("runSync times out a hung command", () => {
+  const r = runSync("node", ["-e", "setTimeout(()=>{}, 10000)"], { timeoutMs: 50 });
+  assert.equal(r.timedOut, true);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /timed out after 50ms/);
+});
+
 test("runAsync resolves on exit", async () => {
   const r = await runAsync("node", ["-e", "console.log('hi')"]);
   assert.equal(r.exitCode, 0);

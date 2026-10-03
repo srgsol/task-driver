@@ -57,7 +57,7 @@ async function main() {
     skillPath: join(root, "implement.md"),
     linear: createLinearClient(apiKey),
     git: createGit(runSync),
-    gates: createGates(runSync),
+    gates: createGates(runSync, { timeoutMs: config.gateTimeoutMs }),
     gh: createGh(runSync),
     executor: createExecutor(runAsync),
     workRoot,

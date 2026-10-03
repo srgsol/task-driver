@@ -4,7 +4,12 @@ import { dirname, resolve } from "node:path";
 /** Config loading and validation for `task-driver.config.json`. */
 
 /** Defaults applied when the config file omits top-level tunables. */
-export const DEFAULTS = { attempts: 2, timeoutMs: 900000, thinking: "medium" };
+export const DEFAULTS = {
+  attempts: 2,
+  timeoutMs: 900000,
+  gateTimeoutMs: 300000,
+  thinking: "medium",
+};
 
 /**
  * @typedef {{ name: string; cmd: string; args: string[] }} GateConfig
@@ -18,7 +23,14 @@ export const DEFAULTS = { attempts: 2, timeoutMs: 900000, thinking: "medium" };
  *   gates: GateConfig[];
  * }} RepoConfig
  *
- * @typedef {{ repos: RepoConfig[]; attempts: number; timeoutMs: number; thinking: string }} Config
+ *
+ * @typedef {{
+ *   repos: RepoConfig[];
+ *   attempts: number;
+ *   timeoutMs: number;
+ *   gateTimeoutMs: number;
+ *   thinking: string;
+ * }} Config
  */
 
 /**
@@ -50,12 +62,15 @@ export function validateConfig(raw) {
   });
   const attempts = raw.attempts ?? DEFAULTS.attempts;
   const timeoutMs = raw.timeoutMs ?? DEFAULTS.timeoutMs;
+  const gateTimeoutMs = raw.gateTimeoutMs ?? DEFAULTS.gateTimeoutMs;
   const thinking = raw.thinking ?? DEFAULTS.thinking;
   if (!Number.isInteger(attempts) || attempts < 1)
     throw new Error("config.attempts must be an integer >= 1");
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1)
     throw new Error("config.timeoutMs must be an integer >= 1");
-  return { repos, attempts, timeoutMs, thinking };
+  if (!Number.isInteger(gateTimeoutMs) || gateTimeoutMs < 1)
+    throw new Error("config.gateTimeoutMs must be an integer >= 1");
+  return { repos, attempts, timeoutMs, gateTimeoutMs, thinking };
 }
 
 /**

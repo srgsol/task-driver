@@ -31,6 +31,7 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  * @property {RepoConfig[]} repos
  * @property {number} attempts
  * @property {number} timeoutMs
+ * @property {number} gateTimeoutMs
  * @property {string} thinking
  *
  * @typedef {object} Issue
@@ -44,6 +45,7 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  * @property {string} name
  * @property {boolean} passed
  * @property {string} output
+ * @property {boolean} timedOut
  *
  * @typedef {object} GatesRun
  * @property {boolean} green
@@ -194,7 +196,10 @@ export function createLoop({
 
   const gatesSummary = (/** @type {GatesRun} */ r) =>
     r.results
-      .map((/** @type {GateResult} */ x) => `- \`${x.name}\`: ${x.passed ? "passed" : "FAILED"}`)
+      .map((/** @type {GateResult} */ x) => {
+        const status = x.passed ? "passed" : x.timedOut ? "FAILED (timed out)" : "FAILED";
+        return `- \`${x.name}\`: ${status}`;
+      })
       .join("\n");
 
   // Re-check independently of the agent: exit code, branch pushed, gates green.
