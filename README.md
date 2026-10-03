@@ -108,6 +108,25 @@ package.json
 | `models`          | Optional alias → `pi --model` pattern map, e.g. `{ "fast": "openai/gpt-4o-mini" }`. Referenced by `model-<alias>` labels.                                                                           |
 | `efforts`         | Optional alias → `pi --thinking` level map (`off`…`max`). Referenced by `effort-<alias>` labels.                                                                                                    |
 
+### Per-issue model & effort
+
+Each issue can run the agent with its own model and thinking level, chosen with
+label aliases:
+
+| Label (leaf)     | Meaning        | Decoded to         |
+| ---------------- | -------------- | ------------------ |
+| `model-<alias>`  | which model    | `models[<alias>]`  |
+| `effort-<alias>` | thinking level | `efforts[<alias>]` |
+
+The `ai` group is cosmetic: `ai:model-fast` and `model-fast` both resolve (a
+leading `ai:` / `ai/` is stripped before matching). Aliases are case-sensitive.
+
+An issue with no such labels keeps the global `thinking` and pi's default model.
+An **unknown or duplicated** alias never runs the agent: task-driver comments the
+error, adds the `ai:error` label, and moves the issue to `Backlog` so it stays out
+of the pick list until a human fixes the label or the config. A bad model ID that
+is configured but not installed by pi surfaces as an ordinary failed agent run.
+
 ### Gates
 
 Every repo declares its gates explicitly in `task-driver.config.json`.

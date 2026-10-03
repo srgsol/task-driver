@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { branchName } from "./slug.mjs";
 import { readPlan as readPlanFromDisk } from "./executor.mjs";
+import { resolveAgentParams } from "./params.mjs";
 
 /**
  * The processing loop: for each repo it lists open task-driver issues and, per issue, claims it,
@@ -33,6 +34,8 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  * @property {number} timeoutMs
  * @property {number} gateTimeoutMs
  * @property {string} thinking
+ * @property {Record<string, string>} [models]
+ * @property {Record<string, string>} [efforts]
  *
  * @typedef {object} Issue
  * @property {string} id
@@ -40,6 +43,7 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  * @property {string} title
  * @property {string | null} description
  * @property {string} url
+ * @property {string[]} [labels]
  *
  * @typedef {object} GateResult
  * @property {string} name
@@ -61,6 +65,7 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
  * @property {(issueId: string, body: string) => Promise<void>} comment
  * @property {(issueId: string, description: string) => Promise<void>} updateDescription
+ * @property {(issueId: string, labelName: string) => Promise<void>} addLabel
  * @property {(teamKey: string, projectName: string) => Promise<Issue[]>} listOpenIssues
  *
  * @typedef {object} Git
@@ -93,6 +98,8 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  *   message: string;
  *   workRoot: string;
  *   repoName: string;
+ *   model?: string;
+ *   thinking?: string;
  * }) => Promise<RunResult>} runAgent
  *
  *
@@ -249,20 +256,50 @@ export function createLoop({
     const sessionId = `task-driver-${repo.name}-${issue.identifier}`;
     const logPath = join(workRoot, repo.name, "logs", `${sessionId}.jsonl`);
     const planPath = join(workRoot, repo.name, "plans", `${issue.identifier}.md`);
+    const params = resolveAgentParams(issue.labels, config);
+
+    if (!params.ok) {
+      if (dryRun) {
+        log(`  [dry] would flag ${issue.identifier}: ${params.error} (ai:error + Backlog)`);
+        return { identifier: issue.identifier, outcome: "config-error" };
+      }
+      log(`→ ${issue.identifier}: config error — ${params.error}`);
+      await bestEffort(`${issue.identifier}: could not post config-error note`, () =>
+        linear.comment(
+          issue.id,
+          `❌ task-driver: ${params.error}. Fix the label or add the alias to task-driver.config.json.`,
+        ),
+      );
+      await bestEffort(`${issue.identifier}: could not add ai:error label`, () =>
+        linear.addLabel(issue.id, "ai:error"),
+      );
+      await bestEffort(`${issue.identifier}: could not move to Backlog`, () =>
+        linear.moveState(issue.id, "Backlog"),
+      );
+      return { identifier: issue.identifier, outcome: "config-error" };
+    }
 
     if (dryRun) {
       log(`  [dry] would claim ${issue.identifier} → In Progress`);
       log(`  [dry] would branch ${branch} from ${BASE_BRANCH}`);
-      log(`  [dry] would run pi (session ${sessionId})`);
+      log(
+        `  [dry] would run pi (session ${sessionId}) with model ${params.model ?? "(default)"}, thinking ${params.thinking}`,
+      );
       log(`  [dry] would open PR (${BASE_BRANCH} ← ${branch})`);
       return { identifier: issue.identifier, outcome: "dry" };
     }
 
+    const detail = [
+      params.modelAlias ? `model ${params.modelAlias}` : null,
+      params.effortAlias ? `effort ${params.effortAlias}` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
     try {
       await linear.moveState(issue.id, "In Progress");
       await linear.comment(
         issue.id,
-        `🤖 task-driver: implementing ${issue.identifier} on branch \`${branch}\``,
+        `🤖 task-driver: implementing ${issue.identifier} on branch \`${branch}\`${detail ? ` (${detail})` : ""}`,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -289,6 +326,8 @@ export function createLoop({
       message: issuePrompt(issue, branch, planPath, repo),
       workRoot,
       repoName: repo.name,
+      model: params.model,
+      thinking: params.thinking,
     });
     let v = verify(repo, branch, first);
 
@@ -304,6 +343,8 @@ export function createLoop({
         message: repairPrompt(issue, branch, first, planPath, repo),
         workRoot,
         repoName: repo.name,
+        model: params.model,
+        thinking: params.thinking,
       });
       v = verify(repo, branch, second);
     }

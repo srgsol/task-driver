@@ -13,6 +13,7 @@ function makeDeps(opts = {}) {
     runAgent: [],
     createPR: [],
     pushBranch: [],
+    addLabel: [],
   };
   const agentResults = opts.agentResults ?? [
     { exitCode: 0, timedOut: false, stdout: "", stderr: "" },
@@ -43,6 +44,7 @@ function makeDeps(opts = {}) {
     moveState: async (id, s) => calls.moveState.push([id, s]),
     comment: async (id, b) => calls.comments.push([id, b]),
     updateDescription: async (id, d) => calls.updateDescription.push([id, d]),
+    addLabel: async (id, name) => calls.addLabel.push([id, name]),
     ...opts.linear,
   };
   const gh = {
@@ -76,6 +78,8 @@ function makeDeps(opts = {}) {
     attempts: 2,
     timeoutMs: 1,
     thinking: "medium",
+    models: opts.models ?? {},
+    efforts: opts.efforts ?? {},
   };
   const loop = createLoop({
     config,
@@ -87,7 +91,7 @@ function makeDeps(opts = {}) {
     executor,
     workRoot: "/w",
     readPlan: opts.readPlan ?? (() => null),
-    log: () => {},
+    log: opts.log ?? (() => {}),
   });
   return { loop, calls };
 }
@@ -328,4 +332,115 @@ test("cleanup checkout error after PR does not abort the run", async () => {
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "pr");
+});
+
+test("resolves label aliases and passes model and effort to the agent", async () => {
+  const { loop, calls } = makeDeps({
+    models: { fast: "openai/gpt-4o-mini" },
+    efforts: { high: "high" },
+    issues: [
+      {
+        id: "i1",
+        identifier: "SER-9",
+        title: "Fix drag",
+        description: "d",
+        url: "u",
+        labels: ["model-fast", "effort-high"],
+      },
+    ],
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "pr");
+  assert.equal(calls.runAgent[0].model, "openai/gpt-4o-mini");
+  assert.equal(calls.runAgent[0].thinking, "high");
+  assert.match(calls.comments[0][1], /model fast/);
+  assert.match(calls.comments[0][1], /effort high/);
+});
+
+test("unknown model alias fails before claiming or branching", async () => {
+  const { loop, calls } = makeDeps({
+    issues: [
+      {
+        id: "i1",
+        identifier: "SER-9",
+        title: "t",
+        description: "",
+        url: "u",
+        labels: ["model-nope"],
+      },
+    ],
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "config-error");
+  assert.deepEqual(calls.moveState, [["i1", "Backlog"]]);
+  assert.deepEqual(calls.addLabel, [["i1", "ai:error"]]);
+  assert.match(calls.comments[0][1], /unknown model alias/);
+  assert.equal(calls.runAgent.length, 0);
+  assert.equal(calls.createBranch.length, 0);
+});
+
+test("conflicting effort labels fail with a config-error", async () => {
+  const { loop, calls } = makeDeps({
+    efforts: { low: "low", high: "high" },
+    issues: [
+      {
+        id: "i1",
+        identifier: "SER-9",
+        title: "t",
+        description: "",
+        url: "u",
+        labels: ["effort-low", "effort-high"],
+      },
+    ],
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "config-error");
+  assert.deepEqual(calls.moveState, [["i1", "Backlog"]]);
+  assert.equal(calls.runAgent.length, 0);
+});
+
+test("dry-run reports resolved params without mutating", async () => {
+  const logs = [];
+  const { loop, calls } = makeDeps({
+    models: { fast: "openai/x" },
+    log: (m) => logs.push(m),
+    issues: [
+      {
+        id: "i1",
+        identifier: "SER-9",
+        title: "t",
+        description: "",
+        url: "u",
+        labels: ["model-fast"],
+      },
+    ],
+  });
+  const results = await loop(true);
+  assert.equal(results[0].outcome, "dry");
+  assert.ok(
+    logs.some((l) => /openai\/x/.test(l)),
+    `expected the resolved model in dry-run logs, got: ${logs.join(" | ")}`,
+  );
+  assert.equal(calls.moveState.length, 0);
+  assert.equal(calls.addLabel.length, 0);
+  assert.equal(calls.runAgent.length, 0);
+});
+
+test("dry-run flags a config-error without mutating", async () => {
+  const { loop, calls } = makeDeps({
+    issues: [
+      {
+        id: "i1",
+        identifier: "SER-9",
+        title: "t",
+        description: "",
+        url: "u",
+        labels: ["model-nope"],
+      },
+    ],
+  });
+  const results = await loop(true);
+  assert.equal(results[0].outcome, "config-error");
+  assert.equal(calls.moveState.length, 0);
+  assert.equal(calls.addLabel.length, 0);
 });
