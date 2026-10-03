@@ -174,20 +174,6 @@ test("comment posts body", async () => {
   assert.equal(seen.input.body, "hello");
 });
 
-test("updateDescription posts the description", async () => {
-  let seen;
-  const client = createLinearClient(
-    "k",
-    fakeFetch((q, v) => {
-      seen = v;
-      return { issueUpdate: { success: true } };
-    }),
-  );
-  await client.updateDescription("i1", "## Implementation Plan\n\n# plan");
-  assert.equal(seen.input.description, "## Implementation Plan\n\n# plan");
-  assert.equal(seen.input.stateId, undefined);
-});
-
 test("createIssue posts input and returns the created issue", async () => {
   let seen;
   const client = createLinearClient(

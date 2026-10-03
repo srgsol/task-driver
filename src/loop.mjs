@@ -5,14 +5,10 @@ import { resolveAgentParams } from "./params.mjs";
 
 /**
  * The processing loop: for each repo it lists open task-driver issues and, per issue, claims it,
- * drives the agent, re-verifies gates, opens a PR, and writes the implementation plan back into the
- * issue description.
+ * drives the agent, re-verifies gates, opens a PR, and posts the implementation plan as a comment.
  */
 
 const BASE_BRANCH = "master";
-
-const PLAN_START = "<!-- task-driver:plan:start -->";
-const PLAN_END = "<!-- task-driver:plan:end -->";
 
 /**
  * @typedef {object} GateConfig
@@ -64,7 +60,6 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  * @typedef {object} LinearClient
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
  * @property {(issueId: string, body: string) => Promise<void>} comment
- * @property {(issueId: string, description: string) => Promise<void>} updateDescription
  * @property {(issueId: string, labelName: string) => Promise<void>} addLabel
  * @property {(teamKey: string, projectName: string) => Promise<Issue[]>} listOpenIssues
  *
@@ -117,19 +112,13 @@ const PLAN_END = "<!-- task-driver:plan:end -->";
  */
 
 /**
- * Add (or replace) the `## Implementation Plan` section in an issue description.
+ * Format the implementation plan as the body of a Linear comment.
  *
- * @param {string | null | undefined} description
  * @param {string} plan
  * @returns {string}
  */
-export function upsertPlanSection(description, plan) {
-  const current = (description ?? "").trimEnd();
-  const stripped = current
-    .replace(/<!-- task-driver:plan:start -->[\s\S]*?<!-- task-driver:plan:end -->/g, "")
-    .trimEnd();
-  const block = `${PLAN_START}\n## Implementation Plan\n\n${plan.trim()}\n${PLAN_END}`;
-  return [stripped, block].filter((s) => s.length > 0).join("\n\n");
+export function formatPlanComment(plan) {
+  return `## Implementation Plan\n\n${plan.trim()}`;
 }
 
 /**
@@ -366,13 +355,13 @@ export function createLoop({
 
     if (plan) {
       try {
-        await linear.updateDescription(issue.id, upsertPlanSection(issue.description, plan));
+        await linear.comment(issue.id, formatPlanComment(plan));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        log(`  ⚠️  ${issue.identifier}: could not save plan to issue (${message})`);
+        log(`  ⚠️  ${issue.identifier}: could not post plan comment (${message})`);
       }
     } else {
-      log(`  ⚠️  ${issue.identifier}: no implementation plan produced — skipping issue write-back`);
+      log(`  ⚠️  ${issue.identifier}: no implementation plan produced — skipping plan comment`);
     }
 
     if (v.ok) {

@@ -10,7 +10,7 @@ claim (Todo → In Progress + comment)
    → create branch SER-<num>-<slug> from master
    → pi agent: write plan → implement → gates → commit → git push (SSH)
    → controller re-verifies: exit 0 · branch pushed · gates green
-   → save plan into the issue description
+   → post the plan as a comment on the issue
    → gh pr create  →  comment PR link on the issue
    → back to master; next issue
 ```
@@ -235,8 +235,8 @@ tail -f work/tiktak/logs/task-driver-tiktak-SER-15.jsonl | jq .
 ```
 
 The agent's plan path and gate commands are injected into its task message; the
-plan is then read back from `work/<repo>/plans/` and persisted into the Linear
-issue description.
+plan is then read back from `work/<repo>/plans/` and posted as a comment on the
+Linear issue.
 
 ## Rules
 

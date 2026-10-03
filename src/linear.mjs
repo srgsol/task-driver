@@ -50,7 +50,6 @@ function hasUnresolvedBlocker(issue) {
  * }) => Promise<LinearIssue>} createIssue
  * @property {(issueId: string, body: string) => Promise<void>} comment
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
- * @property {(issueId: string, description: string) => Promise<void>} updateDescription
  * @property {(issueId: string, labelName: string) => Promise<void>} addLabel
  */
 
@@ -272,18 +271,6 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
         { id: issueId, input: { stateId: state.id } },
       );
       if (!data.issueUpdate?.success) throw new Error(`Failed to move ${issueId} to ${stateName}`);
-    },
-    /**
-     * @param {string} issueId
-     * @param {string} description
-     * @returns {Promise<void>}
-     */
-    async updateDescription(issueId, description) {
-      const data = await gql(
-        `mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }`,
-        { id: issueId, input: { description } },
-      );
-      if (!data.issueUpdate?.success) throw new Error(`Failed to update description of ${issueId}`);
     },
     /**
      * Add a label (given as `group:leaf` or a bare leaf) to an issue, creating the label if needed.
