@@ -236,3 +236,96 @@ test("repair message uses injected gates, not the old literal list", async () =>
   assert.match(msg, /## Configuration/);
   assert.match(msg, /- npm test/);
 });
+
+test("branch setup failure is caught and the next issue still runs", async () => {
+  const { loop, calls } = makeDeps({
+    issues: [
+      { id: "i1", identifier: "SER-1", title: "One", description: "", url: "u1" },
+      { id: "i2", identifier: "SER-2", title: "Two", description: "", url: "u2" },
+    ],
+    git: {
+      createBranch: (p, b) => {
+        if (b.startsWith("SER-1")) throw new Error("dirty tree");
+        calls.createBranch.push([p, b]);
+      },
+    },
+  });
+  const results = await loop(false);
+  assert.deepEqual(
+    results.map((r) => r.outcome),
+    ["skipped", "pr"],
+  );
+  assert.equal(calls.runAgent.length, 1);
+});
+
+test("checkout failure during branch setup skips the issue", async () => {
+  const { loop, calls } = makeDeps({
+    git: {
+      checkout: () => {
+        throw new Error("boom");
+      },
+    },
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "skipped");
+  assert.equal(calls.runAgent.length, 0);
+});
+
+test("failure-path comment error does not abort the run", async () => {
+  const { loop, calls } = makeDeps({
+    agentResults: [
+      { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
+      { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
+    ],
+    gates: {
+      runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }),
+    },
+    linear: {
+      comment: async (id, b) => {
+        if (/could not complete/.test(b)) throw new Error("linear down");
+        calls.comments.push([id, b]);
+      },
+    },
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "failed");
+  assert.deepEqual(calls.moveState, [
+    ["i1", "In Progress"],
+    ["i1", "Todo"],
+  ]);
+});
+
+test("failure-path moveState error does not abort the run", async () => {
+  const { loop, calls } = makeDeps({
+    agentResults: [
+      { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
+      { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
+    ],
+    gates: {
+      runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }),
+    },
+    linear: {
+      moveState: async (id, s) => {
+        calls.moveState.push([id, s]);
+        if (s === "Todo") throw new Error("linear down");
+      },
+    },
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "failed");
+});
+
+test("cleanup checkout error after PR does not abort the run", async () => {
+  let checkouts = 0;
+  const { loop, calls } = makeDeps({
+    git: {
+      checkout: (p, r) => {
+        checkouts += 1;
+        calls.checkout.push([p, r]);
+        if (checkouts > 1) throw new Error("checkout failed");
+      },
+    },
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "pr");
+});
