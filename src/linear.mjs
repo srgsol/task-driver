@@ -19,6 +19,7 @@ const RESOLVED_STATES = new Set(["Done", "Canceled"]);
  * @property {string} url
  * @property {{ nodes?: { type: string; relatedIssue?: { state?: { name?: string } } }[] }} [relations]
  * @property {{ nodes?: { type: string; issue?: { state?: { name?: string } } }[] }} [inverseRelations]
+ * @property {string[]} [labels]
  */
 
 /**
@@ -50,6 +51,7 @@ function hasUnresolvedBlocker(issue) {
  * @property {(issueId: string, body: string) => Promise<void>} comment
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
  * @property {(issueId: string, description: string) => Promise<void>} updateDescription
+ * @property {(issueId: string, labelName: string) => Promise<void>} addLabel
  */
 
 /**
@@ -109,6 +111,73 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
     return json.data;
   }
 
+  /**
+   * Find issue labels by their exact leaf name.
+   *
+   * @param {string} name
+   * @returns {Promise<any[]>}
+   */
+  async function findLabelsByName(name) {
+    const data = await gql(
+      `query($filter: IssueLabelFilter) {
+        issueLabels(filter: $filter, first: 50) {
+          nodes { id name isGroup parent { id name } }
+        }
+      }`,
+      { filter: { name: { eq: name } } },
+    );
+    return data.issueLabels?.nodes ?? [];
+  }
+
+  /**
+   * Resolve a label id by leaf name under an optional group, creating the group and/or leaf when
+   * they do not exist yet.
+   *
+   * @param {string | null} group
+   * @param {string} leaf
+   * @returns {Promise<string>}
+   */
+  async function resolveOrCreateLabel(group, leaf) {
+    const candidates = await findLabelsByName(leaf);
+    const existing = candidates.find(
+      (/** @type {{ parent?: { name?: string } | null }} */ n) =>
+        (n.parent?.name ?? null) === group,
+    );
+    if (existing) return existing.id;
+
+    /** @type {string | undefined} */
+    let parentId;
+    if (group) {
+      const groups = (await findLabelsByName(group)).filter(
+        (/** @type {{ isGroup?: boolean }} */ n) => n.isGroup,
+      );
+      parentId = groups[0]?.id;
+      if (!parentId) {
+        const createdGroup = await gql(
+          `mutation($input: IssueLabelCreateInput!) {
+            issueLabelCreate(input: $input) { success issueLabel { id } }
+          }`,
+          { input: { name: group, isGroup: true } },
+        );
+        if (!createdGroup.issueLabelCreate?.success) {
+          throw new Error(`Failed to create label group "${group}"`);
+        }
+        parentId = createdGroup.issueLabelCreate.issueLabel.id;
+      }
+    }
+
+    const created = await gql(
+      `mutation($input: IssueLabelCreateInput!) {
+        issueLabelCreate(input: $input) { success issueLabel { id } }
+      }`,
+      { input: parentId ? { name: leaf, parentId } : { name: leaf } },
+    );
+    if (!created.issueLabelCreate?.success) {
+      throw new Error(`Failed to create label "${leaf}"`);
+    }
+    return created.issueLabelCreate.issueLabel.id;
+  }
+
   return {
     /**
      * @param {string} teamKey
@@ -123,6 +192,7 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
               id identifier title description url
               relations { nodes { type relatedIssue { state { name } } } }
               inverseRelations { nodes { type issue { state { name } } } }
+              labels { nodes { name } }
             }
           }
         }`,
@@ -135,9 +205,12 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
           },
         },
       );
-      return (data.issues.nodes ?? []).filter(
-        (/** @type {any} */ issue) => !hasUnresolvedBlocker(issue),
-      );
+      return (data.issues.nodes ?? [])
+        .filter((/** @type {any} */ issue) => !hasUnresolvedBlocker(issue))
+        .map((/** @type {any} */ issue) => ({
+          ...issue,
+          labels: (issue.labels?.nodes ?? []).map((/** @type {{ name: string }} */ n) => n.name),
+        }));
     },
     /**
      * @param {string} identifier
@@ -211,6 +284,26 @@ export function createLinearClient(apiKey, fetchImpl = fetch) {
         { id: issueId, input: { description } },
       );
       if (!data.issueUpdate?.success) throw new Error(`Failed to update description of ${issueId}`);
+    },
+    /**
+     * Add a label (given as `group:leaf` or a bare leaf) to an issue, creating the label if needed.
+     *
+     * @param {string} issueId
+     * @param {string} labelName
+     * @returns {Promise<void>}
+     */
+    async addLabel(issueId, labelName) {
+      const sep = labelName.search(/[:/]/);
+      const group = sep === -1 ? null : labelName.slice(0, sep);
+      const leaf = sep === -1 ? labelName : labelName.slice(sep + 1);
+      const labelId = await resolveOrCreateLabel(group, leaf);
+      const data = await gql(
+        `mutation($id: String!, $input: IssueUpdateInput!) {
+          issueUpdate(id: $id, input: $input) { success }
+        }`,
+        { id: issueId, input: { addedLabelIds: [labelId] } },
+      );
+      if (!data.issueUpdate?.success) throw new Error(`Failed to add label "${labelName}"`);
     },
   };
 }

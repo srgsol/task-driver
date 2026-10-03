@@ -234,3 +234,115 @@ test("throws on API error", async () => {
   }));
   await assert.rejects(() => client.getIssue("SER-9"), /boom/);
 });
+
+test("listOpenIssues exposes label leaf names", async () => {
+  const nodes = [
+    {
+      id: "i1",
+      identifier: "SER-1",
+      title: "t",
+      description: null,
+      url: "u1",
+      relations: { nodes: [] },
+      inverseRelations: { nodes: [] },
+      labels: { nodes: [{ name: "task-driver" }, { name: "model-fast" }] },
+    },
+  ];
+  const client = createLinearClient(
+    "k",
+    fakeFetch(() => ({ issues: { nodes } })),
+  );
+  const issues = await client.listOpenIssues("SER", "tik-tak");
+  assert.deepEqual(issues[0].labels, ["task-driver", "model-fast"]);
+});
+
+test("listOpenIssues requests the labels field", async () => {
+  let q;
+  const client = createLinearClient(
+    "k",
+    fakeFetch((query) => {
+      q = query;
+      return { issues: { nodes: [] } };
+    }),
+  );
+  await client.listOpenIssues("SER", "tik-tak");
+  assert.match(q, /labels\s*\{\s*nodes\s*\{\s*name/);
+});
+
+test("addLabel reuses an existing grouped label", async () => {
+  let added;
+  const client = createLinearClient(
+    "k",
+    fakeFetch((query, vars) => {
+      if (query.includes("issueLabels")) {
+        return {
+          issueLabels: {
+            nodes: [{ id: "L1", name: "error", isGroup: false, parent: { id: "G1", name: "ai" } }],
+          },
+        };
+      }
+      if (query.includes("issueLabelCreate")) throw new Error("should not create");
+      added = vars.input.addedLabelIds;
+      return { issueUpdate: { success: true } };
+    }),
+  );
+  await client.addLabel("i1", "ai:error");
+  assert.deepEqual(added, ["L1"]);
+});
+
+test("addLabel creates the group and leaf when missing", async () => {
+  const creates = [];
+  let added;
+  const client = createLinearClient(
+    "k",
+    fakeFetch((query, vars) => {
+      if (query.includes("issueLabels")) return { issueLabels: { nodes: [] } };
+      if (query.includes("issueLabelCreate")) {
+        creates.push(vars.input);
+        return {
+          issueLabelCreate: {
+            success: true,
+            issueLabel: { id: vars.input.isGroup ? "G1" : "L2" },
+          },
+        };
+      }
+      added = vars.input.addedLabelIds;
+      return { issueUpdate: { success: true } };
+    }),
+  );
+  await client.addLabel("i1", "ai:error");
+  assert.deepEqual(creates, [
+    { name: "ai", isGroup: true },
+    { name: "error", parentId: "G1" },
+  ]);
+  assert.deepEqual(added, ["L2"]);
+});
+
+test("addLabel resolves an ungrouped label", async () => {
+  let added;
+  const client = createLinearClient(
+    "k",
+    fakeFetch((query, vars) => {
+      if (query.includes("issueLabels")) {
+        return {
+          issueLabels: { nodes: [{ id: "L3", name: "flaky", isGroup: false, parent: null }] },
+        };
+      }
+      added = vars.input.addedLabelIds;
+      return { issueUpdate: { success: true } };
+    }),
+  );
+  await client.addLabel("i1", "flaky");
+  assert.deepEqual(added, ["L3"]);
+});
+
+test("addLabel throws when the label cannot be created", async () => {
+  const client = createLinearClient(
+    "k",
+    fakeFetch((query) => {
+      if (query.includes("issueLabels")) return { issueLabels: { nodes: [] } };
+      return { issueLabelCreate: { success: false } };
+    }),
+  );
+  await assert.rejects(() => client.addLabel("i1", "flaky"), /Failed to create label/);
+});
