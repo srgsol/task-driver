@@ -12,6 +12,14 @@ function fakeFetch(handler) {
   };
 }
 
+function jsonResponse(data, status = 200) {
+  return { status, text: async () => JSON.stringify({ data }) };
+}
+
+function graphqlErrorResponse(status, message) {
+  return { status, text: async () => JSON.stringify({ errors: [{ message }] }) };
+}
+
 test("listOpenIssues requests relation fields", async () => {
   let seenQuery;
   const client = createLinearClient(
@@ -331,4 +339,138 @@ test("addLabel throws when the label cannot be created", async () => {
     }),
   );
   await assert.rejects(() => client.addLabel("i1", "flaky"), /Failed to create label/);
+});
+
+test("gql retries a transient network error then succeeds", async () => {
+  let calls = 0;
+  const delays = [];
+  const client = createLinearClient(
+    "k",
+    async () => {
+      calls++;
+      if (calls === 1) throw new Error("ECONNRESET");
+      return jsonResponse({
+        issue: { id: "i1", identifier: "SER-1", title: "t", description: null, url: "u" },
+      });
+    },
+    {
+      attempts: 3,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    },
+  );
+  const issue = await client.getIssue("SER-1");
+  assert.equal(issue.identifier, "SER-1");
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [250]);
+});
+
+test("gql retries a 5xx then succeeds", async () => {
+  let calls = 0;
+  const client = createLinearClient(
+    "k",
+    async () => {
+      calls++;
+      if (calls === 1) return graphqlErrorResponse(503, "service unavailable");
+      return jsonResponse({ issues: { nodes: [] } });
+    },
+    { attempts: 3, sleep: async () => {} },
+  );
+  const issues = await client.listOpenIssues("SER", "tik-tak");
+  assert.deepEqual(issues, []);
+  assert.equal(calls, 2);
+});
+
+test("gql retries 429 rate limits", async () => {
+  let calls = 0;
+  const client = createLinearClient(
+    "k",
+    async () => {
+      calls++;
+      if (calls === 1) return graphqlErrorResponse(429, "rate limited");
+      return jsonResponse({
+        issue: { id: "i1", identifier: "SER-1", title: "t", description: null, url: "u" },
+      });
+    },
+    { attempts: 3, sleep: async () => {} },
+  );
+  const issue = await client.getIssue("SER-1");
+  assert.equal(issue.id, "i1");
+  assert.equal(calls, 2);
+});
+
+test("gql does not retry a 4xx and preserves the error message", async () => {
+  let calls = 0;
+  const delays = [];
+  const client = createLinearClient(
+    "k",
+    async () => {
+      calls++;
+      return graphqlErrorResponse(400, "bad request");
+    },
+    {
+      attempts: 3,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    },
+  );
+  await assert.rejects(
+    () => client.getIssue("SER-1"),
+    /Linear API error \(HTTP 400\): bad request/,
+  );
+  assert.equal(calls, 1);
+  assert.deepEqual(delays, []);
+});
+
+test("gql gives up after the configured attempts", async () => {
+  let calls = 0;
+  const client = createLinearClient(
+    "k",
+    async () => {
+      calls++;
+      return graphqlErrorResponse(502, "bad gateway");
+    },
+    { attempts: 3, sleep: async () => {} },
+  );
+  await assert.rejects(
+    () => client.getIssue("SER-1"),
+    /Linear API error \(HTTP 502\): bad gateway/,
+  );
+  assert.equal(calls, 3);
+});
+
+test("gql backs off exponentially between retries", async () => {
+  const delays = [];
+  const client = createLinearClient(
+    "k",
+    async () => {
+      throw new Error("network down");
+    },
+    {
+      attempts: 4,
+      baseDelayMs: 100,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    },
+  );
+  await assert.rejects(() => client.getIssue("SER-1"), /network down/);
+  assert.deepEqual(delays, [100, 200, 400]);
+});
+
+test("gql retries mutations too", async () => {
+  let calls = 0;
+  const client = createLinearClient(
+    "k",
+    async () => {
+      calls++;
+      if (calls === 1) throw new Error("socket hang up");
+      return jsonResponse({ commentCreate: { success: true } });
+    },
+    { attempts: 3, sleep: async () => {} },
+  );
+  await client.comment("i1", "hello");
+  assert.equal(calls, 2);
 });
