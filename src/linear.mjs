@@ -8,6 +8,41 @@ import { homedir } from "node:os";
  */
 const API_URL = "https://api.linear.app/graphql";
 
+/** Retry/backoff defaults for transient Linear API failures. */
+const DEFAULT_ATTEMPTS = 3;
+const DEFAULT_BASE_DELAY_MS = 250;
+
+/**
+ * Failure worth retrying (network error, 429, or 5xx). Retried by `gql`; when attempts are
+ * exhausted it propagates like any other error.
+ */
+class RetryableLinearError extends Error {}
+
+/**
+ * @typedef {object} LinearRetryOptions
+ * @property {number} [attempts] Maximum attempts including the first (default 3).
+ * @property {number} [baseDelayMs] First backoff delay in ms; doubles each retry (default 250).
+ * @property {(ms: number) => Promise<void>} [sleep] Delay implementation, injectable for tests.
+ */
+
+/**
+ * @param {unknown} err
+ * @returns {string}
+ */
+function errorMessage(err) {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * HTTP statuses safe to retry: rate limiting and server errors.
+ *
+ * @param {number} status
+ * @returns {boolean}
+ */
+function isRetryableStatus(status) {
+  return status === 429 || status >= 500;
+}
+
 const RESOLVED_STATES = new Set(["Done", "Canceled"]);
 
 /**
@@ -78,36 +113,75 @@ export function getLinearApiKey() {
  *
  * @param {string} apiKey
  * @param {typeof fetch} [fetchImpl]
+ * @param {LinearRetryOptions} [retry]
  * @returns {LinearClient}
  */
-export function createLinearClient(apiKey, fetchImpl = fetch) {
+export function createLinearClient(apiKey, fetchImpl = fetch, retry = {}) {
+  const attempts = Math.max(1, retry.attempts ?? DEFAULT_ATTEMPTS);
+  const baseDelayMs = retry.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
+  const sleep =
+    retry.sleep ?? ((/** @type {number} */ ms) => new Promise((r) => setTimeout(r, ms)));
+
   /**
-   * Execute one GraphQL request and return its `data` payload.
+   * Perform a single GraphQL request. Throws `RetryableLinearError` for transient failures and a
+   * plain `Error` otherwise (preserving the original message formats).
+   *
+   * @param {string} query
+   * @param {Record<string, any>} variables
+   * @returns {Promise<any>}
+   */
+  async function request(query, variables) {
+    let res;
+    try {
+      res = await fetchImpl(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: apiKey },
+        body: JSON.stringify({ query, variables }),
+      });
+    } catch (err) {
+      throw new RetryableLinearError(`Linear API request failed: ${errorMessage(err)}`);
+    }
+    let text;
+    try {
+      text = await res.text();
+    } catch (err) {
+      throw new RetryableLinearError(`Linear API request failed: ${errorMessage(err)}`);
+    }
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      const message = `Linear API returned non-JSON (HTTP ${res.status})`;
+      if (isRetryableStatus(res.status)) throw new RetryableLinearError(message);
+      throw new Error(message);
+    }
+    if (res.status !== 200 || json.errors?.length) {
+      const msgs = (json.errors ?? [])
+        .map((/** @type {{ message: string }} */ e) => e.message)
+        .join("; ");
+      const message = `Linear API error (HTTP ${res.status}): ${msgs || "unknown"}`;
+      if (isRetryableStatus(res.status)) throw new RetryableLinearError(message);
+      throw new Error(message);
+    }
+    return json.data;
+  }
+
+  /**
+   * Execute one GraphQL request, retrying transient failures with exponential backoff.
    *
    * @param {string} query
    * @param {Record<string, any>} variables
    * @returns {Promise<any>}
    */
   async function gql(query, variables) {
-    const res = await fetchImpl(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: apiKey },
-      body: JSON.stringify({ query, variables }),
-    });
-    const text = await res.text();
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      throw new Error(`Linear API returned non-JSON (HTTP ${res.status})`);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await request(query, variables);
+      } catch (err) {
+        if (attempt >= attempts || !(err instanceof RetryableLinearError)) throw err;
+        await sleep(baseDelayMs * 2 ** (attempt - 1));
+      }
     }
-    if (res.status !== 200 || json.errors?.length) {
-      const msgs = (json.errors ?? [])
-        .map((/** @type {{ message: string }} */ e) => e.message)
-        .join("; ");
-      throw new Error(`Linear API error (HTTP ${res.status}): ${msgs || "unknown"}`);
-    }
-    return json.data;
   }
 
   /**
