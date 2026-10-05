@@ -255,6 +255,63 @@ test("listOpenIssues requests the labels field", async () => {
   assert.match(q, /labels\s*\{\s*nodes\s*\{\s*name/);
 });
 
+test("listOpenIssues requests page info and passes the after cursor", async () => {
+  let query;
+  let after;
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q, vars) => {
+      query = q;
+      after = vars.after;
+      return { issues: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } };
+    }),
+  );
+  await client.listOpenIssues("SER", "tik-tak");
+  assert.match(query, /pageInfo\s*\{\s*hasNextPage\s+endCursor\s*\}/);
+  assert.equal(after, undefined);
+});
+
+test("listOpenIssues pages until hasNextPage is false", async () => {
+  const pages = [
+    {
+      nodes: [{ id: "i1", identifier: "SER-1", title: "t", description: null, url: "u1" }],
+      pageInfo: { hasNextPage: true, endCursor: "cursor-1" },
+    },
+    {
+      nodes: [{ id: "i2", identifier: "SER-2", title: "t", description: null, url: "u2" }],
+      pageInfo: { hasNextPage: true, endCursor: "cursor-2" },
+    },
+    {
+      nodes: [{ id: "i3", identifier: "SER-3", title: "t", description: null, url: "u3" }],
+      pageInfo: { hasNextPage: false, endCursor: "cursor-3" },
+    },
+  ];
+  const afterArgs = [];
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q, vars) => {
+      afterArgs.push(vars.after);
+      return { issues: pages[afterArgs.length - 1] };
+    }),
+  );
+  const issues = await client.listOpenIssues("SER", "tik-tak");
+  assert.deepEqual(
+    issues.map((i) => i.identifier),
+    ["SER-1", "SER-2", "SER-3"],
+  );
+  assert.deepEqual(afterArgs, [undefined, "cursor-1", "cursor-2"]);
+});
+
+test("listOpenIssues throws rather than looping when a page has no end cursor", async () => {
+  const client = createLinearClient(
+    "k",
+    fakeFetch(() => ({
+      issues: { nodes: [], pageInfo: { hasNextPage: true, endCursor: null } },
+    })),
+  );
+  await assert.rejects(() => client.listOpenIssues("SER", "tik-tak"), /endCursor/);
+});
+
 test("addLabel reuses an existing grouped label", async () => {
   let added;
   const client = createLinearClient(
