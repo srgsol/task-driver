@@ -258,27 +258,42 @@ export function createLinearClient(apiKey, fetchImpl = fetch, retry = {}) {
      * @returns {Promise<LinearIssue[]>}
      */
     async listOpenIssues(teamKey, projectName) {
-      const data = await gql(
-        `query($filter: IssueFilter) {
-          issues(filter: $filter, first: 100) {
-            nodes {
-              id identifier title description url
-              relations { nodes { type relatedIssue { state { name } } } }
-              inverseRelations { nodes { type issue { state { name } } } }
-              labels { nodes { name } }
+      const filter = {
+        team: { key: { eq: teamKey } },
+        project: { name: { eq: projectName } },
+        state: { name: { eq: "Todo" } },
+        labels: { name: { eq: "task-driver" } },
+      };
+
+      /** @type {any[]} */
+      const nodes = [];
+      /** @type {string | undefined} */
+      let after;
+      for (;;) {
+        const data = await gql(
+          `query($filter: IssueFilter, $after: String) {
+            issues(filter: $filter, first: 100, after: $after) {
+              nodes {
+                id identifier title description url
+                relations { nodes { type relatedIssue { state { name } } } }
+                inverseRelations { nodes { type issue { state { name } } } }
+                labels { nodes { name } }
+              }
+              pageInfo { hasNextPage endCursor }
             }
-          }
-        }`,
-        {
-          filter: {
-            team: { key: { eq: teamKey } },
-            project: { name: { eq: projectName } },
-            state: { name: { eq: "Todo" } },
-            labels: { name: { eq: "task-driver" } },
-          },
-        },
-      );
-      return (data.issues.nodes ?? [])
+          }`,
+          { filter, after },
+        );
+        const page = data.issues ?? {};
+        nodes.push(...(page.nodes ?? []));
+        if (!page.pageInfo?.hasNextPage) break;
+        if (!page.pageInfo.endCursor) {
+          throw new Error("Linear returned hasNextPage without an endCursor");
+        }
+        after = page.pageInfo.endCursor;
+      }
+
+      return nodes
         .filter((/** @type {any} */ issue) => !hasUnresolvedBlocker(issue))
         .map((/** @type {any} */ issue) => ({
           ...issue,
