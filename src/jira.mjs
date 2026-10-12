@@ -1,6 +1,3 @@
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
 import { markdownToAdf, adfToText } from "./adf.mjs";
 
 /**
@@ -132,7 +129,7 @@ function errorDetail(text) {
 }
 
 /**
- * Resolve Jira credentials from `JIRA_EMAIL`/`JIRA_API_TOKEN`, else `~/.pi/jira.json`.
+ * Resolve Jira credentials from `JIRA_EMAIL`/`JIRA_API_TOKEN`.
  *
  * @returns {{ email: string; apiToken: string } | null}
  */
@@ -140,18 +137,6 @@ export function getJiraCredentials() {
   const email = process.env.JIRA_EMAIL?.trim();
   const apiToken = process.env.JIRA_API_TOKEN?.trim();
   if (email && apiToken) return { email, apiToken };
-
-  const file = join(homedir(), ".pi", "jira.json");
-  if (existsSync(file)) {
-    try {
-      const raw = JSON.parse(readFileSync(file, "utf8"));
-      const fileEmail = typeof raw.email === "string" ? raw.email.trim() : "";
-      const fileToken = typeof raw.apiToken === "string" ? raw.apiToken.trim() : "";
-      if (fileEmail && fileToken) return { email: fileEmail, apiToken: fileToken };
-    } catch {
-      /* ignore malformed config */
-    }
-  }
   return null;
 }
 

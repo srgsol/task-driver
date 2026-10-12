@@ -62,7 +62,7 @@ async function main() {
   if (usesLinear) {
     const apiKey = getLinearApiKey();
     if (!apiKey) {
-      console.error("task-driver: LINEAR_API_KEY not set and ~/.pi/linear.json not found.");
+      console.error("task-driver: LINEAR_API_KEY is not set. Add it to .env or the environment.");
       process.exit(1);
     }
     linear = createLinearClient(apiKey);
@@ -74,7 +74,7 @@ async function main() {
     const creds = getJiraCredentials();
     if (!creds) {
       console.error(
-        "task-driver: JIRA_EMAIL/JIRA_API_TOKEN not set and ~/.pi/jira.json not found.",
+        "task-driver: JIRA_EMAIL/JIRA_API_TOKEN are not set. Add them to .env or the environment.",
       );
       process.exit(1);
     }

@@ -858,17 +858,17 @@ test("getJiraCredentials prefers the environment variables", () => {
   });
 });
 
-test("getJiraCredentials reads ~/.pi/jira.json and returns null when unresolved", () => {
+test("getJiraCredentials ignores ~/.pi/jira.json and returns null when unresolved", () => {
   const home = mkdtempSync(join(tmpdir(), "task-driver-jira-"));
   try {
     withEnv({ JIRA_EMAIL: undefined, JIRA_API_TOKEN: undefined, HOME: home }, () => {
-      assert.equal(getJiraCredentials(), null);
       mkdirSync(join(home, ".pi"), { recursive: true });
       writeFileSync(
         join(home, ".pi", "jira.json"),
-        JSON.stringify({ email: " file@x.com ", apiToken: " ftok " }),
+        JSON.stringify({ email: "file@x.com", apiToken: "ftok" }),
       );
-      assert.deepEqual(getJiraCredentials(), { email: "file@x.com", apiToken: "ftok" });
+
+      assert.equal(getJiraCredentials(), null);
     });
   } finally {
     rmSync(home, { recursive: true, force: true });

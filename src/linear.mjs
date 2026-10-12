@@ -1,7 +1,3 @@
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
-
 /**
  * Minimal Linear GraphQL client covering the operations task-driver needs: list open issues, fetch
  * one issue, comment, move state, update description.
@@ -96,23 +92,12 @@ function hasUnresolvedBlocker(issue) {
  */
 
 /**
- * Resolve the Linear API key from the environment or `~/.pi/linear.json`.
+ * Resolve the Linear API key from `LINEAR_API_KEY`.
  *
  * @returns {string | undefined}
  */
 export function getLinearApiKey() {
-  const env = process.env.LINEAR_API_KEY?.trim();
-  if (env) return env;
-  const file = join(homedir(), ".pi", "linear.json");
-  if (existsSync(file)) {
-    try {
-      const raw = JSON.parse(readFileSync(file, "utf8"));
-      if (raw.apiKey?.trim()) return raw.apiKey.trim();
-    } catch {
-      /* ignore malformed config */
-    }
-  }
-  return undefined;
+  return process.env.LINEAR_API_KEY?.trim() || undefined;
 }
 
 /**

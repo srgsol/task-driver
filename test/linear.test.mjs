@@ -1,6 +1,32 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createLinearClient } from "../src/linear.mjs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createLinearClient, getLinearApiKey } from "../src/linear.mjs";
+
+/**
+ * Run `fn` with `vars` applied to `process.env`, restoring every touched key afterwards.
+ *
+ * @param {Record<string, string | undefined>} vars
+ * @param {() => void} fn
+ */
+function withEnv(vars, fn) {
+  const saved = new Map();
+  for (const [key, value] of Object.entries(vars)) {
+    saved.set(key, process.env[key]);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    return fn();
+  } finally {
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
 
 function fakeFetch(handler) {
   return async (url, opts) => {
@@ -636,4 +662,24 @@ test("gql retries mutations too", async () => {
   );
   await client.comment("i1", "hello");
   assert.equal(calls, 2);
+});
+
+test("getLinearApiKey reads and trims LINEAR_API_KEY", () => {
+  withEnv({ LINEAR_API_KEY: " key-from-env " }, () => {
+    assert.equal(getLinearApiKey(), "key-from-env");
+  });
+});
+
+test("getLinearApiKey ignores ~/.pi/linear.json", () => {
+  const home = mkdtempSync(join(tmpdir(), "task-driver-linear-"));
+  try {
+    withEnv({ LINEAR_API_KEY: undefined, HOME: home }, () => {
+      mkdirSync(join(home, ".pi"), { recursive: true });
+      writeFileSync(join(home, ".pi", "linear.json"), JSON.stringify({ apiKey: "from-file" }));
+
+      assert.equal(getLinearApiKey(), undefined);
+    });
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

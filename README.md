@@ -27,14 +27,12 @@ any target repo.
 
 - **Linear API key** — `LINEAR_API_KEY`, read from the git-ignored `.env` at the
   project root (or from the real environment). Resolved only when at least one
-  repo uses the (default) Linear provider. `~/.pi/linear.json` still works as a
-  fallback.
+  repo uses the (default) Linear provider.
 - **Jira Cloud credentials** — `JIRA_EMAIL` + `JIRA_API_TOKEN`, read from the
   same `.env` (or the real environment). Resolved only when at least one repo
-  uses `provider: "jira"`. `~/.pi/jira.json`
-  (`{ "email": "…", "apiToken": "…" }`) still works as a fallback. Auth is
-  HTTP Basic against Jira Cloud REST v3; the site root is the config's top-level
-  `jiraBaseUrl` (e.g. `https://your-company.atlassian.net`).
+  uses `provider: "jira"`. Auth is HTTP Basic against Jira Cloud REST v3; the
+  site root is the config's top-level `jiraBaseUrl`
+  (e.g. `https://your-company.atlassian.net`).
 - **`GITHUB_TOKEN`** — a fine-grained PAT in each target repo's `.env`
   (gitignored), injected as `GH_TOKEN` per `gh` command. Never run
   `gh auth login` here. See the global `gh-auth` pi skill
