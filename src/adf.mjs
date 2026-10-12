@@ -4,6 +4,7 @@
  * @typedef {object} AdfNode
  * @property {string} type
  * @property {string} [text]
+ * @property {{ level?: number }} [attrs]
  * @property {AdfNode[]} [content]
  */
 
@@ -34,15 +35,16 @@ function textNode(text) {
 }
 
 /**
- * Parse an ATX heading (`#`–`######`).
+ * Parse a CommonMark ATX heading: one to six hashes followed by whitespace or end-of-line. `#foo`
+ * and `####### foo` are therefore not headings.
  *
  * @param {string} line
  * @returns {{ level: number; text: string } | null}
  */
 function heading(line) {
-  const match = /^(#{1,6})\s*(.*)$/.exec(line);
+  const match = /^(#{1,6})(?:\s+(.*))?$/.exec(line);
   if (!match) return null;
-  return { level: match[1].length, text: match[2] };
+  return { level: match[1].length, text: match[2] ?? "" };
 }
 
 /**
@@ -75,10 +77,17 @@ function blockText(content) {
 function renderNode(node) {
   const type = node.type;
   if (type === "text" || type === "code") return node.text ?? "";
-  if (type === "hr") return "---";
+  if (type === "rule" || type === "hr") return "---";
+  if (type === "heading") {
+    const level = Number(node.attrs?.level ?? 1);
+    return `${"#".repeat(level)} ${inlineText(node.content)}`;
+  }
   if (/^h[1-6]$/.test(type)) return `${"#".repeat(Number(type[1]))} ${inlineText(node.content)}`;
-  if (type === "paragraph" || type === "li") return inlineText(node.content);
-  if (type === "ul") {
+  if (type === "codeBlock") return inlineText(node.content);
+  if (type === "paragraph" || type === "li" || type === "listItem") {
+    return inlineText(node.content);
+  }
+  if (type === "ul" || type === "bulletList") {
     return (node.content ?? []).map((item) => `- ${renderNode(item)}`).join("\n");
   }
   if (type === "doc" || Array.isArray(node.content)) return blockText(node.content);
@@ -89,9 +98,10 @@ function renderNode(node) {
  * Convert a markdown string into an ADF `doc`, for Jira comment bodies.
  *
  * Supported block syntax is deliberately minimal: ATX headings, a run of consecutive `- ` lines
- * (one `ul`), fenced code blocks (one `code` node whose `text` is the interior lines), blank-line
- * separated blocks, and every other non-empty line as a `paragraph`. Richer markdown falls through
- * as a paragraph of its raw line.
+ * (one `bulletList`), fenced code blocks (one `codeBlock` whose text is the interior lines),
+ * blank-line separated blocks, and every other non-empty line as a `paragraph`. Richer markdown
+ * falls through as a paragraph of its raw line. Node types are real ADF (Jira Cloud REST v3 rejects
+ * unknown types), not shorthand.
  *
  * @param {string} markdown
  * @returns {AdfDoc}
@@ -113,13 +123,17 @@ export function markdownToAdf(markdown) {
         code.push(lines[i]);
         i++;
       }
-      content.push({ type: "code", text: code.join("\n") });
+      content.push({ type: "codeBlock", content: [textNode(code.join("\n"))] });
       continue;
     }
 
     const head = heading(line);
     if (head) {
-      content.push({ type: `h${head.level}`, content: [textNode(head.text)] });
+      content.push({
+        type: "heading",
+        attrs: { level: head.level },
+        content: [textNode(head.text)],
+      });
       continue;
     }
 
@@ -127,11 +141,14 @@ export function markdownToAdf(markdown) {
       /** @type {AdfNode[]} */
       const items = [];
       while (i < lines.length && lines[i].startsWith("- ")) {
-        items.push({ type: "li", content: [textNode(lines[i].slice(2))] });
+        items.push({
+          type: "listItem",
+          content: [{ type: "paragraph", content: [textNode(lines[i].slice(2))] }],
+        });
         i++;
       }
       i--;
-      content.push({ type: "ul", content: items });
+      content.push({ type: "bulletList", content: items });
       continue;
     }
 

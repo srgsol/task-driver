@@ -7,15 +7,21 @@ test("markdownToAdf converts headings, lists, fences and paragraphs", () => {
   assert.equal(doc.type, "doc");
   assert.equal(doc.version, 1);
   assert.deepEqual(doc.content, [
-    { type: "h1", content: [{ type: "text", text: "Plan" }] },
+    { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Plan" }] },
     {
-      type: "ul",
+      type: "bulletList",
       content: [
-        { type: "li", content: [{ type: "text", text: "a" }] },
-        { type: "li", content: [{ type: "text", text: "b" }] },
+        {
+          type: "listItem",
+          content: [{ type: "paragraph", content: [{ type: "text", text: "a" }] }],
+        },
+        {
+          type: "listItem",
+          content: [{ type: "paragraph", content: [{ type: "text", text: "b" }] }],
+        },
       ],
     },
-    { type: "code", text: "pipe x" },
+    { type: "codeBlock", content: [{ type: "text", text: "pipe x" }] },
     { type: "paragraph", content: [{ type: "text", text: "plain" }] },
   ]);
 });
@@ -25,15 +31,37 @@ test("adfToText renders a document to plain text", () => {
     type: "doc",
     version: 1,
     content: [
-      { type: "h2", content: [{ type: "text", text: "Gates" }] },
-      { type: "ul", content: [{ type: "li", content: [{ type: "text", text: "test" }] }] },
+      { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Gates" }] },
+      {
+        type: "bulletList",
+        content: [
+          {
+            type: "listItem",
+            content: [{ type: "paragraph", content: [{ type: "text", text: "test" }] }],
+          },
+        ],
+      },
       { type: "paragraph", content: [{ type: "text", text: "done" }] },
     ],
   });
   assert.equal(text, "## Gates\n- test\ndone");
 });
 
-test("adfToText handles null and a bare code node", () => {
+test("markdownToAdf only treats 1-6 hashes followed by whitespace as headings", () => {
+  assert.deepEqual(markdownToAdf("####### foo").content, [
+    { type: "paragraph", content: [{ type: "text", text: "####### foo" }] },
+  ]);
+  assert.deepEqual(markdownToAdf("#foo").content, [
+    { type: "paragraph", content: [{ type: "text", text: "#foo" }] },
+  ]);
+  assert.deepEqual(markdownToAdf("# Plan").content, [
+    { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Plan" }] },
+  ]);
+});
+
+test("adfToText handles null and shorthand/real code and rule nodes", () => {
   assert.equal(adfToText(null), "");
   assert.equal(adfToText({ type: "code", text: "x\ny" }), "x\ny");
+  assert.equal(adfToText({ type: "codeBlock", content: [{ type: "text", text: "x\ny" }] }), "x\ny");
+  assert.equal(adfToText({ type: "rule" }), "---");
 });
