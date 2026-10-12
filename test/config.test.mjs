@@ -190,9 +190,19 @@ test("validateConfig merges linear workflow overrides over the defaults", () => 
   assert.deepEqual(c.repos[0].workflow, {
     open: "Ready",
     claim: "In Progress",
-    reopen: "Todo",
+    reopen: "Ready",
     park: "Backlog",
   });
+});
+
+test("validateConfig defaults a linear reopen to the configured open state", () => {
+  const c = validateConfig({ repos: [repo({ workflow: { open: "WIP" } })] });
+  assert.equal(c.repos[0].workflow.reopen, "WIP");
+});
+
+test("validateConfig keeps an explicit linear reopen override", () => {
+  const c = validateConfig({ repos: [repo({ workflow: { open: "WIP", reopen: "Todo" } })] });
+  assert.equal(c.repos[0].workflow.reopen, "Todo");
 });
 
 test("validateConfig does not require jiraBaseUrl without jira repos", () => {

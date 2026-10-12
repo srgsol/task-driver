@@ -14,8 +14,11 @@ export const DEFAULTS = {
   thinking: "medium",
 };
 
-/** Linear workflow defaults; they preserve today's behavior for existing configs. */
-const LINEAR_WORKFLOW = { open: "Todo", claim: "In Progress", reopen: "Todo", park: "Backlog" };
+/**
+ * Linear workflow defaults; they preserve today's behavior for existing configs. `reopen` defaults
+ * to the configured `open` state, not to a separate constant.
+ */
+const LINEAR_WORKFLOW = { open: "Todo", claim: "In Progress", park: "Backlog" };
 
 /** Label defaults applied to every repo unless the config overrides them. */
 const LABEL_DEFAULTS = { pick: "task-driver", error: "ai:error" };
@@ -121,7 +124,7 @@ export function validateConfig(raw) {
       normalizedWorkflow = {
         open,
         claim,
-        reopen: workflow.reopen ?? LINEAR_WORKFLOW.reopen,
+        reopen: workflow.reopen ?? open,
         park: workflow.park ?? LINEAR_WORKFLOW.park,
       };
     } else {
