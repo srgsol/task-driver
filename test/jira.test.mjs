@@ -598,6 +598,90 @@ test("createIssue posts ADF fields and maps the response", async () => {
   });
 });
 
+test("createIssue omits the description field when no description is given", async () => {
+  const requests = [];
+  const client = createJiraClient(CREDS, {
+    fetchImpl: async (url, opts) => {
+      requests.push({ url, opts });
+      return jsonResponse({ key: "PROJ-20" }, 201);
+    },
+  });
+
+  const issue = await client.createIssue({ project: "PROJ", issueType: "Task", title: "T" });
+
+  assert.equal(requests[0].url, `${BASE_URL}/rest/api/3/issue`);
+  assert.deepEqual(JSON.parse(requests[0].opts.body), {
+    fields: {
+      project: { key: "PROJ" },
+      issuetype: { name: "Task" },
+      summary: "T",
+    },
+  });
+  assert.equal(issue.description, "");
+});
+
+test("createIssue treats an empty or whitespace description as absent", async () => {
+  const requests = [];
+  const client = createJiraClient(CREDS, {
+    fetchImpl: async (url, opts) => {
+      requests.push({ url, opts });
+      return jsonResponse({ key: "PROJ-20" }, 201);
+    },
+  });
+
+  const empty = await client.createIssue({
+    project: "PROJ",
+    issueType: "Task",
+    title: "T",
+    description: "",
+  });
+  const blank = await client.createIssue({
+    project: "PROJ",
+    issueType: "Task",
+    title: "T",
+    description: "   ",
+  });
+
+  for (const request of requests) {
+    assert.deepEqual(JSON.parse(request.opts.body), {
+      fields: {
+        project: { key: "PROJ" },
+        issuetype: { name: "Task" },
+        summary: "T",
+      },
+    });
+  }
+  assert.equal(empty.description, "");
+  assert.equal(blank.description, "");
+});
+
+test("createIssue sends the ADF description when one is given", async () => {
+  const requests = [];
+  const client = createJiraClient(CREDS, {
+    fetchImpl: async (url, opts) => {
+      requests.push({ url, opts });
+      return jsonResponse({ key: "PROJ-20" }, 201);
+    },
+  });
+
+  const issue = await client.createIssue({
+    project: "PROJ",
+    issueType: "Task",
+    title: "T",
+    description: "d",
+  });
+
+  assert.deepEqual(JSON.parse(requests[0].opts.body), {
+    fields: {
+      project: { key: "PROJ" },
+      issuetype: { name: "Task" },
+      summary: "T",
+      description: markdownToAdf("d"),
+    },
+  });
+  assert.equal(issue.description, "d");
+});
+
 test("createIssue uses the response browseUrl and labels when present", async () => {
   const client = createJiraClient(CREDS, {
     fetchImpl: async () =>

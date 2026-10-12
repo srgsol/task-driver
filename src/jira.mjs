@@ -478,23 +478,31 @@ export function createJiraClient(creds, options = {}) {
      * @returns {Promise<JiraIssue>}
      */
     async createIssue({ project, issueType, title, description = "" }) {
+      const hasDescription = typeof description === "string" && description.trim() !== "";
+      /**
+       * @type {{
+       *   project: { key: string };
+       *   issuetype: { name: string };
+       *   summary: string;
+       *   description?: object;
+       * }}
+       */
+      const fields = {
+        project: { key: project },
+        issuetype: { name: issueType },
+        summary: title,
+      };
+      if (hasDescription) fields.description = markdownToAdf(description);
       const created = await call(`${baseUrl}/rest/api/3/issue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fields: {
-            project: { key: project },
-            issuetype: { name: issueType },
-            summary: title,
-            description: markdownToAdf(description),
-          },
-        }),
+        body: JSON.stringify({ fields }),
       });
       return {
         id: created.key,
         identifier: created.key,
         title,
-        description,
+        description: hasDescription ? description : "",
         url: created.browseUrl ?? `${baseUrl}/browse/${created.key}`,
         labels: created.fields?.labels ?? [],
       };
