@@ -12,8 +12,11 @@ import { markdownToAdf, adfToText } from "./adf.mjs";
 const DEFAULT_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 250;
 
-/** Page size for the `startAt`/`maxResults` search pagination. */
+/** Page size for the enhanced-search (`nextPageToken`) pagination. */
 const SEARCH_PAGE_SIZE = 100;
+
+/** Cursor-paginated JQL search endpoint, replacing the removed `/rest/api/3/search`. */
+const SEARCH_PATH = "/rest/api/3/search/jql";
 
 /** Field list requested for pickable issues. */
 const LIST_FIELDS = "summary,description,labels,status,issuelinks";
@@ -181,7 +184,8 @@ function isResolved(issue) {
 }
 
 /**
- * Blocker keys referenced by a candidate's outbound blocking links.
+ * Blocker keys referenced by a candidate: the far end (`inwardIssue`) of each link whose type
+ * matches a configured blocking link type, by `type.name` or `type.outward`.
  *
  * @param {any} issue
  * @param {string[]} linkTypes
@@ -191,12 +195,16 @@ function blockerKeys(issue, linkTypes) {
   /** @type {string[]} */
   const keys = [];
   for (const link of issue?.fields?.issuelinks ?? []) {
-    const name = link?.type?.name;
-    const outward = link?.outwardIssue?.key;
-    if (typeof name !== "string" || typeof outward !== "string") continue;
-    if (outward === issue.key) continue;
-    if (!linkTypes.some((type) => type.toLowerCase() === name.toLowerCase())) continue;
-    keys.push(outward);
+    const key = link?.inwardIssue?.key;
+    if (typeof key !== "string" || key === issue.key) continue;
+    const type = link?.type;
+    const matches = [type?.name, type?.outward].some(
+      (/** @type {unknown} */ value) =>
+        typeof value === "string" &&
+        linkTypes.some((blocking) => blocking.toLowerCase() === value.toLowerCase()),
+    );
+    if (!matches) continue;
+    keys.push(key);
   }
   return keys;
 }
@@ -315,20 +323,25 @@ export function createJiraClient(creds, options = {}) {
   }
 
   /**
-   * Fetch one page of `GET /rest/api/3/search`.
+   * Fetch one cursor page of `GET /rest/api/3/search/jql`.
    *
    * @param {string} jql
-   * @param {number} startAt
+   * @param {string | undefined} nextPageToken
    * @param {string} fields
    * @returns {Promise<any>}
    */
-  async function searchPage(jql, startAt, fields) {
-    const url = `${baseUrl}/rest/api/3/search?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${SEARCH_PAGE_SIZE}&fields=${fields}`;
-    return call(url, { method: "GET" });
+  async function searchPage(jql, nextPageToken, fields) {
+    const params = new URLSearchParams({
+      jql,
+      maxResults: String(SEARCH_PAGE_SIZE),
+      fields,
+    });
+    if (nextPageToken) params.set("nextPageToken", nextPageToken);
+    return call(`${baseUrl}${SEARCH_PATH}?${params}`, { method: "GET" });
   }
 
   /**
-   * Follow `startAt`/`maxResults` pagination until `startAt >= total`.
+   * Follow `nextPageToken` pagination until the last page, a missing/empty token, or an empty page.
    *
    * @param {string} jql
    * @param {string} fields
@@ -337,15 +350,15 @@ export function createJiraClient(creds, options = {}) {
   async function searchAll(jql, fields) {
     /** @type {any[]} */
     const issues = [];
-    let startAt = 0;
+    /** @type {string | undefined} */
+    let nextPageToken;
     for (;;) {
-      const page = await searchPage(jql, startAt, fields);
+      const page = await searchPage(jql, nextPageToken, fields);
       const batch = Array.isArray(page?.issues) ? page.issues : [];
       issues.push(...batch);
-      if (batch.length === 0) break;
-      startAt += batch.length;
-      const total = Number(page?.total);
-      if (Number.isFinite(total) && startAt >= total) break;
+      if (batch.length === 0 || page?.isLast === true) break;
+      if (typeof page?.nextPageToken !== "string" || page.nextPageToken === "") break;
+      nextPageToken = page.nextPageToken;
     }
     return issues;
   }

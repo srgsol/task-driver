@@ -83,9 +83,7 @@ test("listOpenIssues builds JQL, authenticates, and maps issues", async () => {
       fetchImpl: async (url, opts) => {
         requests.push({ url, opts });
         return jsonResponse({
-          startAt: 0,
-          maxResults: 100,
-          total: 1,
+          isLast: true,
           issues: [
             searchIssue("PROJ-12", {
               fields: {
@@ -107,12 +105,12 @@ test("listOpenIssues builds JQL, authenticates, and maps issues", async () => {
 
   const url = new URL(requests[0].url);
   assert.equal(url.origin, BASE_URL);
-  assert.equal(url.pathname, "/rest/api/3/search");
+  assert.equal(url.pathname, "/rest/api/3/search/jql");
   assert.equal(
     url.searchParams.get("jql"),
     'project = "PROJ" AND status = "To Do" AND labels = "task-driver"',
   );
-  assert.equal(url.searchParams.get("startAt"), "0");
+  assert.equal(url.searchParams.get("nextPageToken"), null);
   assert.equal(url.searchParams.get("maxResults"), "100");
   assert.equal(url.searchParams.get("fields"), "summary,description,labels,status,issuelinks");
   assert.equal(requests[0].opts.headers.Authorization, `Basic ${btoa("u@x.com:t")}`);
@@ -131,8 +129,7 @@ test("listOpenIssues builds JQL, authenticates, and maps issues", async () => {
 
 test("listOpenIssues falls back to <baseUrl>/browse/<key> when browseUrl is missing", async () => {
   const client = createJiraClient(CREDS, {
-    fetchImpl: async () =>
-      jsonResponse({ startAt: 0, maxResults: 100, total: 1, issues: [searchIssue("PROJ-3")] }),
+    fetchImpl: async () => jsonResponse({ isLast: true, issues: [searchIssue("PROJ-3")] }),
   });
   const issues = await client.listOpenIssues(jiraRepo());
   assert.equal(issues[0].url, `${BASE_URL}/browse/PROJ-3`);
@@ -144,7 +141,7 @@ test("listOpenIssues uses status in (...) for an array open", async () => {
   const client = createJiraClient(CREDS, {
     fetchImpl: async (url) => {
       jql = new URL(url).searchParams.get("jql");
-      return jsonResponse({ startAt: 0, maxResults: 100, total: 0, issues: [] });
+      return jsonResponse({ isLast: true, issues: [] });
     },
   });
   await client.listOpenIssues(
@@ -156,22 +153,20 @@ test("listOpenIssues uses status in (...) for an array open", async () => {
   );
 });
 
-test("listOpenIssues paginates until startAt reaches total", async () => {
-  const startAts = [];
-  const pages = {
-    0: [searchIssue("PROJ-1"), searchIssue("PROJ-2")],
-    2: [searchIssue("PROJ-3")],
-  };
+test("listOpenIssues paginates with nextPageToken until isLast", async () => {
+  const requests = [];
+  const pages = [
+    {
+      issues: [searchIssue("PROJ-1"), searchIssue("PROJ-2")],
+      isLast: false,
+      nextPageToken: "tok2",
+    },
+    { issues: [searchIssue("PROJ-3")], isLast: true },
+  ];
   const client = createJiraClient(CREDS, {
     fetchImpl: async (url) => {
-      const startAt = Number(new URL(url).searchParams.get("startAt"));
-      startAts.push(startAt);
-      return jsonResponse({
-        startAt,
-        maxResults: 2,
-        total: 3,
-        issues: /** @type {Record<number, object[]>} */ (pages)[startAt],
-      });
+      requests.push(new URL(url));
+      return jsonResponse(pages[requests.length - 1]);
     },
   });
   const issues = await client.listOpenIssues(jiraRepo());
@@ -179,7 +174,26 @@ test("listOpenIssues paginates until startAt reaches total", async () => {
     issues.map((i) => i.identifier),
     ["PROJ-1", "PROJ-2", "PROJ-3"],
   );
-  assert.deepEqual(startAts, [0, 2]);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].searchParams.get("nextPageToken"), null);
+  assert.equal(requests[1].searchParams.get("nextPageToken"), "tok2");
+  for (const request of requests) assert.equal(request.searchParams.get("startAt"), null);
+});
+
+test("listOpenIssues stops when a page is last even if a token is present", async () => {
+  let calls = 0;
+  const client = createJiraClient(CREDS, {
+    fetchImpl: async () => {
+      calls++;
+      return jsonResponse({ issues: [searchIssue("PROJ-1")], isLast: true, nextPageToken: "tok2" });
+    },
+  });
+  const issues = await client.listOpenIssues(jiraRepo());
+  assert.deepEqual(
+    issues.map((i) => i.identifier),
+    ["PROJ-1"],
+  );
+  assert.equal(calls, 1);
 });
 
 test("listOpenIssues stops when a page returns no issues", async () => {
@@ -187,8 +201,8 @@ test("listOpenIssues stops when a page returns no issues", async () => {
   const client = createJiraClient(CREDS, {
     fetchImpl: async () => {
       calls++;
-      // A malformed `total` must not cause an infinite loop.
-      return jsonResponse({ startAt: 0, maxResults: 100, total: 99, issues: [] });
+      // A non-empty `nextPageToken` with no issues must not cause an infinite loop.
+      return jsonResponse({ issues: [], isLast: false, nextPageToken: "tok2" });
     },
   });
   const issues = await client.listOpenIssues(jiraRepo());
@@ -200,9 +214,7 @@ test("listOpenIssues drops issues carrying the error label", async () => {
   const client = createJiraClient(CREDS, {
     fetchImpl: async () =>
       jsonResponse({
-        startAt: 0,
-        maxResults: 100,
-        total: 1,
+        isLast: true,
         issues: [searchIssue("PROJ-12", { fields: { labels: ["task-driver", "ai:error"] } })],
       }),
   });
@@ -217,9 +229,7 @@ test("listOpenIssues drops candidates whose blocker is unresolved", async () => 
       requests.push({ jql, url });
       if (jql.startsWith("issuekey in")) {
         return jsonResponse({
-          startAt: 0,
-          maxResults: 100,
-          total: 1,
+          isLast: true,
           issues: [
             {
               key: "PROJ-99",
@@ -232,18 +242,15 @@ test("listOpenIssues drops candidates whose blocker is unresolved", async () => 
         });
       }
       return jsonResponse({
-        startAt: 0,
-        maxResults: 100,
-        total: 1,
+        isLast: true,
         issues: [
           searchIssue("PROJ-12", {
             fields: {
               labels: ["task-driver"],
               issuelinks: [
                 {
-                  type: { name: "Blocks" },
-                  outwardIssue: { key: "PROJ-99" },
-                  inwardIssue: { key: "PROJ-12" },
+                  type: { name: "Blocks", inward: "is blocked by", outward: "blocks" },
+                  inwardIssue: { key: "PROJ-99" },
                 },
               ],
             },
@@ -261,27 +268,92 @@ test("listOpenIssues drops candidates whose blocker is unresolved", async () => 
   assert.equal(new URL(batch.url).searchParams.get("fields"), "resolution,status");
 });
 
+test("listOpenIssues does not drop an issue that blocks another", async () => {
+  let batchCalls = 0;
+  const client = createJiraClient(CREDS, {
+    fetchImpl: async (url) => {
+      const jql = new URL(url).searchParams.get("jql");
+      if (jql.startsWith("issuekey in")) {
+        batchCalls++;
+        return jsonResponse({ isLast: true, issues: [] });
+      }
+      return jsonResponse({
+        isLast: true,
+        issues: [
+          searchIssue("PROJ-12", {
+            fields: {
+              issuelinks: [
+                {
+                  type: { name: "Blocks", inward: "is blocked by", outward: "blocks" },
+                  outwardIssue: { key: "PROJ-77" },
+                },
+              ],
+            },
+          }),
+        ],
+      });
+    },
+  });
+  const issues = await client.listOpenIssues(jiraRepo());
+  assert.deepEqual(
+    issues.map((i) => i.identifier),
+    ["PROJ-12"],
+  );
+  assert.equal(batchCalls, 0);
+});
+
+test("listOpenIssues matches blocking types by the link's outward label", async () => {
+  const client = createJiraClient(CREDS, {
+    fetchImpl: async (url) => {
+      const jql = new URL(url).searchParams.get("jql");
+      if (jql.startsWith("issuekey in")) {
+        return jsonResponse({
+          isLast: true,
+          issues: [{ key: "PROJ-99", fields: { resolution: null } }],
+        });
+      }
+      return jsonResponse({
+        isLast: true,
+        issues: [
+          searchIssue("PROJ-12", {
+            fields: {
+              issuelinks: [
+                {
+                  type: { name: "Dependency", outward: "blocks" },
+                  inwardIssue: { key: "PROJ-99" },
+                },
+              ],
+            },
+          }),
+        ],
+      });
+    },
+  });
+  assert.deepEqual(await client.listOpenIssues(jiraRepo()), []);
+});
+
 test("listOpenIssues keeps candidates whose blocker has a resolution", async () => {
   const client = createJiraClient(CREDS, {
     fetchImpl: async (url) => {
       const jql = new URL(url).searchParams.get("jql");
       if (jql.startsWith("issuekey in")) {
         return jsonResponse({
-          startAt: 0,
-          maxResults: 100,
-          total: 1,
+          isLast: true,
           issues: [{ key: "PROJ-99", fields: { resolution: { id: "2", name: "Won't Fix" } } }],
         });
       }
       return jsonResponse({
-        startAt: 0,
-        maxResults: 100,
-        total: 1,
+        isLast: true,
         issues: [
           searchIssue("PROJ-12", {
             fields: {
               labels: ["task-driver"],
-              issuelinks: [{ type: { name: "blocks" }, outwardIssue: { key: "PROJ-99" } }],
+              issuelinks: [
+                {
+                  type: { name: "blocks", inward: "is blocked by", outward: "blocks" },
+                  inwardIssue: { key: "PROJ-99" },
+                },
+              ],
             },
           }),
         ],
@@ -302,9 +374,7 @@ test("listOpenIssues treats a done status category as a resolved blocker", async
       const jql = new URL(url).searchParams.get("jql");
       if (jql.startsWith("issuekey in")) {
         return jsonResponse({
-          startAt: 0,
-          maxResults: 100,
-          total: 1,
+          isLast: true,
           issues: [
             {
               key: "PROJ-99",
@@ -314,13 +384,11 @@ test("listOpenIssues treats a done status category as a resolved blocker", async
         });
       }
       return jsonResponse({
-        startAt: 0,
-        maxResults: 100,
-        total: 1,
+        isLast: true,
         issues: [
           searchIssue("PROJ-12", {
             fields: {
-              issuelinks: [{ type: { name: "Blocks" }, outwardIssue: { key: "PROJ-99" } }],
+              issuelinks: [{ type: { name: "Blocks" }, inwardIssue: { key: "PROJ-99" } }],
             },
           }),
         ],
@@ -340,16 +408,14 @@ test("listOpenIssues treats a blocker missing from the batch as unresolved", asy
     fetchImpl: async (url) => {
       const jql = new URL(url).searchParams.get("jql");
       if (jql.startsWith("issuekey in")) {
-        return jsonResponse({ startAt: 0, maxResults: 100, total: 0, issues: [] });
+        return jsonResponse({ isLast: true, issues: [] });
       }
       return jsonResponse({
-        startAt: 0,
-        maxResults: 100,
-        total: 1,
+        isLast: true,
         issues: [
           searchIssue("PROJ-12", {
             fields: {
-              issuelinks: [{ type: { name: "Blocks" }, outwardIssue: { key: "PROJ-99" } }],
+              issuelinks: [{ type: { name: "Blocks" }, inwardIssue: { key: "PROJ-99" } }],
             },
           }),
         ],
@@ -365,20 +431,21 @@ test("listOpenIssues honors a custom jiraBlockingLinkTypes", async () => {
       const jql = new URL(url).searchParams.get("jql");
       if (jql.startsWith("issuekey in")) {
         return jsonResponse({
-          startAt: 0,
-          maxResults: 100,
-          total: 1,
+          isLast: true,
           issues: [{ key: "PROJ-99", fields: { resolution: null } }],
         });
       }
       return jsonResponse({
-        startAt: 0,
-        maxResults: 100,
-        total: 1,
+        isLast: true,
         issues: [
           searchIssue("PROJ-12", {
             fields: {
-              issuelinks: [{ type: { name: "Depends On" }, outwardIssue: { key: "PROJ-99" } }],
+              issuelinks: [
+                {
+                  type: { name: "Depends On" },
+                  inwardIssue: { key: "PROJ-99" },
+                },
+              ],
             },
           }),
         ],
@@ -396,16 +463,19 @@ test("listOpenIssues ignores non-blocking links", async () => {
       const jql = new URL(url).searchParams.get("jql");
       if (jql.startsWith("issuekey in")) {
         batchCalls++;
-        return jsonResponse({ startAt: 0, maxResults: 100, total: 0, issues: [] });
+        return jsonResponse({ isLast: true, issues: [] });
       }
       return jsonResponse({
-        startAt: 0,
-        maxResults: 100,
-        total: 1,
+        isLast: true,
         issues: [
           searchIssue("PROJ-12", {
             fields: {
-              issuelinks: [{ type: { name: "Relates" }, outwardIssue: { key: "PROJ-99" } }],
+              issuelinks: [
+                {
+                  type: { name: "Relates", outward: "relates to" },
+                  inwardIssue: { key: "PROJ-99" },
+                },
+              ],
             },
           }),
         ],
