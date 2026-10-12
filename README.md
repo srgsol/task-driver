@@ -1,9 +1,10 @@
-# task-driver — Linear → PR automation
+# task-driver — Linear/Jira → PR automation
 
-Reads **`Todo` + `task-driver`-labeled** Linear issues, drives a headless `pi`
-agent per issue (implement → run gates → commit → push), re-verifies
-independently, opens a GitHub PR, and comments the PR link back on the issue.
-A human stays at the merge step.
+Reads open, **`task-driver`-labeled** issues — Linear `Todo` or Jira `To Do`
+per the repo's `workflow` — drives a headless `pi` agent per issue
+(implement → run gates → commit → push), re-verifies independently, opens a
+GitHub PR, and comments the PR link back on the issue. A human stays at the
+merge step.
 
 ```
 claim (Todo → In Progress + comment)
@@ -15,8 +16,8 @@ claim (Todo → In Progress + comment)
    → back to master; next issue
 ```
 
-Only the controller touches Linear and GitHub. The `pi` agent gets no Linear
-tools and no GitHub token (`--no-extensions`, stripped env).
+Only the controller talks to the tracker (Linear or Jira) and GitHub. The `pi`
+agent gets no tracker tools and no GitHub token (`--no-extensions`, stripped env).
 
 This is a **standalone, multi-repo application** — it lives in its own repo and
 targets checkouts by path (see `task-driver.config.json`). It is not vendored into
@@ -25,6 +26,12 @@ any target repo.
 ## Requirements
 
 - **Linear API key** — `LINEAR_API_KEY` env var, or `~/.pi/linear.json`.
+  Resolved only when at least one repo uses the (default) Linear provider.
+- **Jira Cloud credentials** — `JIRA_EMAIL` + `JIRA_API_TOKEN` env vars, or
+  `~/.pi/jira.json` (`{ "email": "…", "apiToken": "…" }`). Resolved only when
+  at least one repo uses `provider: "jira"`. Auth is HTTP Basic against Jira
+  Cloud REST v3; the site root is the config's top-level `jiraBaseUrl`
+  (e.g. `https://your-company.atlassian.net`).
 - **`GITHUB_TOKEN`** — a fine-grained PAT in each target repo's `.env`
   (gitignored), injected as `GH_TOKEN` per `gh` command. Never run
   `gh auth login` here. See the global `gh-auth` pi skill
@@ -82,8 +89,21 @@ package.json
         { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
         { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
       ]
+    },
+    {
+      "name": "company-repo",
+      "path": "../company-repo",
+      "provider": "jira",
+      "jiraProject": "PROJ",
+      "jiraIssueType": "Task",
+      "jiraBlockingLinkTypes": ["blocks"],
+      "workflow": { "open": "To Do", "claim": "In Progress" },
+      "labels": { "pick": "task-driver", "error": "ai:error" },
+      "remote": "git@github.com:srgsol/company-repo.git",
+      "gates": [{ "name": "test", "cmd": "npm", "args": ["test"] }]
     }
   ],
+  "jiraBaseUrl": "https://your-company.atlassian.net",
   "attempts": 2,
   "timeoutMs": 900000,
   "gateTimeoutMs": 300000,
@@ -93,20 +113,27 @@ package.json
 }
 ```
 
-| Key               | Meaning                                                                                                                                                                                             |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `repos[].name`    | Label used in session ids, log names, and messages                                                                                                                                                  |
-| `repos[].path`    | Checkout location, relative to this config file                                                                                                                                                     |
-| `repos[].team`    | Linear team key to poll                                                                                                                                                                             |
-| `repos[].project` | Linear project name to poll (exact match). Each repo routes only issues in this project.                                                                                                            |
-| `repos[].remote`  | Informational (push uses the checkout's own remote)                                                                                                                                                 |
-| `repos[].gates`   | Optional; the full list of gates to run. List every gate the repo has, including `test`, since there is no default set. Omit (or set `[]`) for a repo with no automated gates. See [Gates](#gates). |
-| `attempts`        | Max `pi` runs per issue (1 = no repair pass)                                                                                                                                                        |
-| `timeoutMs`       | Wall-clock cap per `pi` run (`900000` = 15 min)                                                                                                                                                     |
-| `gateTimeoutMs`   | Wall-clock cap per gate command (`300000` = 5 min); a hung gate is killed and reported as failed                                                                                                    |
-| `thinking`        | `pi --thinking` level (`off`…`max`)                                                                                                                                                                 |
-| `models`          | Optional alias → `pi --model` pattern map, e.g. `{ "fast": "openai/gpt-4o-mini" }`. Referenced by `model-<alias>` labels.                                                                           |
-| `efforts`         | Optional alias → `pi --thinking` level map (`off`…`max`). Referenced by `effort-<alias>` labels.                                                                                                    |
+| Key                             | Meaning                                                                                                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `repos[].name`                  | Label used in session ids, log names, and messages                                                                                                                                                                       |
+| `repos[].path`                  | Checkout location, relative to this config file                                                                                                                                                                          |
+| `repos[].provider`              | `"linear"` (default) or `"jira"`. Linear repos use `team`/`project`; Jira repos use `jiraProject` and the top-level `jiraBaseUrl`.                                                                                       |
+| `repos[].team`                  | Linear team key to poll (Linear repos)                                                                                                                                                                                   |
+| `repos[].project`               | Linear project name to poll (exact match, Linear repos). Each repo routes only issues in this project.                                                                                                                   |
+| `repos[].jiraProject`           | Jira project key to poll (required when `provider` is `"jira"`)                                                                                                                                                          |
+| `repos[].jiraIssueType`         | Jira issue type for issues task-driver creates (optional; default `Task`)                                                                                                                                                |
+| `repos[].jiraBlockingLinkTypes` | Jira issue-link type names that count as blockers (optional; default `["blocks"]`)                                                                                                                                       |
+| `repos[].workflow`              | Provider-agnostic state/status map `{ open, claim, reopen?, park? }`. Linear defaults: `Todo`/`In Progress`/`Backlog`. Jira requires `open` (string or array) and `claim`; `reopen` defaults to `open`, `park` is unset. |
+| `repos[].labels`                | Pick/error label names `{ pick, error }` (optional; default `{ "pick": "task-driver", "error": "ai:error" }`); the `error` label is the re-pick guard.                                                                   |
+| `repos[].remote`                | Informational (push uses the checkout's own remote)                                                                                                                                                                      |
+| `repos[].gates`                 | Optional; the full list of gates to run. List every gate the repo has, including `test`, since there is no default set. Omit (or set `[]`) for a repo with no automated gates. See [Gates](#gates).                      |
+| `jiraBaseUrl`                   | Jira Cloud site root, e.g. `https://your-company.atlassian.net`. Required when any repo uses `provider: "jira"`.                                                                                                         |
+| `attempts`                      | Max `pi` runs per issue (1 = no repair pass)                                                                                                                                                                             |
+| `timeoutMs`                     | Wall-clock cap per `pi` run (`900000` = 15 min)                                                                                                                                                                          |
+| `gateTimeoutMs`                 | Wall-clock cap per gate command (`300000` = 5 min); a hung gate is killed and reported as failed                                                                                                                         |
+| `thinking`                      | `pi --thinking` level (`off`…`max`)                                                                                                                                                                                      |
+| `models`                        | Optional alias → `pi --model` pattern map, e.g. `{ "fast": "openai/gpt-4o-mini" }`. Referenced by `model-<alias>` labels.                                                                                                |
+| `efforts`                       | Optional alias → `pi --thinking` level map (`off`…`max`). Referenced by `effort-<alias>` labels.                                                                                                                         |
 
 ### Per-issue model & effort
 
