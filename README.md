@@ -37,9 +37,11 @@ any target repo.
   `gh auth login` here. See the global `gh-auth` pi skill
   (`~/.pi/agent/skills/gh-auth/SKILL.md`) for the pattern.
 - **SSH push access** to each target remote (the PAT is only for `gh` API calls).
-- A **`task-driver` label** in the Linear team, and a **Linear project per repo**
-  (see [Configuration](#configuration)). The controller only picks issues that
-  are `Todo`, carry this label, **and** live in the repo's configured project.
+- A **`task-driver` label** plus either a **Linear team + project per repo** or
+  a **Jira project key** (`jiraProject`) — see [Configuration](#configuration).
+  The controller only picks issues that carry this label, live in the repo's
+  configured team/project, **and** are in the repo's `workflow.open`
+  status/state (for Jira, `open` may be an array of statuses).
 - A **clean `master`** checkout in each target repo (see [Rules](#rules)).
 
 ## Usage
@@ -150,8 +152,10 @@ leading `ai:` / `ai/` is stripped before matching). Aliases are case-sensitive.
 
 An issue with no such labels keeps the global `thinking` and pi's default model.
 An **unknown or duplicated** alias never runs the agent: task-driver comments the
-error, adds the `ai:error` label, and moves the issue to `Backlog` so it stays out
-of the pick list until a human fixes the label or the config. A bad model ID that
+error and adds the `ai:error` label — the label alone is the re-pick guard. Where
+a `park` state/transition is configured it also parks the issue (on Jira, `park`
+is unset by default, so the park step is a no-op) so it stays out of the pick list
+until a human fixes the label or the config. A bad model ID that
 is configured but not installed by pi surfaces as an ordinary failed agent run.
 
 After claiming, task-driver posts a `run parameters` comment with the resolved
@@ -206,10 +210,11 @@ To bring a new repository under the controller, do the following:
    gitignored `.env` (injected per `gh` command as `GH_TOKEN`), plus SSH push
    access to its remote. Never run `gh auth login`. See the global `gh-auth`
    skill.
-4. **Linear label + project** — the `task-driver` label must exist in the repo's
-   Linear team, and the repo's issues must live in a dedicated Linear project
-   (the controller only picks `Todo` + `task-driver`-labeled issues **in that
-   project**).
+4. **Tracker label + project** — the `task-driver` label must exist in the repo's
+   Linear team or Jira project, and the repo's issues must live in a dedicated
+   Linear project or Jira project key (`jiraProject`) (the controller only picks
+   `task-driver`-labeled issues **in that project** that are in the repo's
+   `workflow.open` status/state — for Jira, `open` may be an array of statuses).
 5. **Add an entry** to `repos` in `task-driver.config.json`. `path` is resolved
    relative to this config file. Declare every gate the repo has in `gates`
    (there is no default set — see [Gates](#gates)); set `gates` to `[]` (or omit
