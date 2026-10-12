@@ -2,6 +2,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.mjs";
 import { getLinearApiKey, createLinearClient } from "./linear.mjs";
+import { createTracker } from "./tracker.mjs";
 import { createGit } from "./git.mjs";
 import { createGates } from "./gates.mjs";
 import { createGh } from "./gh.mjs";
@@ -52,10 +53,14 @@ async function main() {
     process.exit(1);
   }
 
+  const linear = createLinearClient(apiKey);
+
   const loop = createLoop({
     config,
     skillPath: join(root, "implement.md"),
-    linear: createLinearClient(apiKey),
+    // Transient bridge (Task 7 wires per-provider clients): the real Linear client's repo type is
+    // narrower than the tracker's, which tsc rejects under parameter contravariance.
+    makeTracker: (repo) => createTracker(repo, { linear: /** @type {any} */ (linear) }),
     git: createGit(runSync),
     gates: createGates(runSync, { timeoutMs: config.gateTimeoutMs }),
     gh: createGh(runSync),

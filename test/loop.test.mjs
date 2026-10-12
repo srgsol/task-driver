@@ -2,12 +2,38 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createLoop, formatPlanComment } from "../src/loop.mjs";
 
+const DEFAULT_ISSUE = {
+  id: "i1",
+  identifier: "SER-9",
+  title: "Fix drag",
+  description: "desc",
+  url: "u",
+};
+
+function defaultRepo() {
+  return {
+    name: "tiktak",
+    path: "/r",
+    provider: "linear",
+    team: "SER",
+    project: "tik-tak",
+    workflow: { open: "Todo", claim: "In Progress", reopen: "Todo", park: "Backlog" },
+    labels: { pick: "ai", error: "ai:error" },
+    remote: "g",
+    gates: [
+      { name: "test", cmd: "npm", args: ["test"] },
+      { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },
+      { name: "lint", cmd: "npm", args: ["run", "lint"] },
+    ],
+  };
+}
+
 function makeDeps(opts = {}) {
   const calls = {
-    listOpenIssues: [],
-    moveState: [],
+    makeTracker: [],
+    listOpen: [],
+    transition: [],
     comments: [],
-    updateDescription: [],
     checkout: [],
     createBranch: [],
     runAgent: [],
@@ -15,6 +41,7 @@ function makeDeps(opts = {}) {
     pushBranch: [],
     addLabel: [],
   };
+  const trackers = [];
   const agentResults = opts.agentResults ?? [
     { exitCode: 0, timedOut: false, stdout: "", stderr: "" },
   ];
@@ -32,21 +59,26 @@ function makeDeps(opts = {}) {
     runGates: () => ({ green: true, results: [{ name: "test", passed: true, output: "" }] }),
     ...opts.gates,
   };
-  const linear = {
-    listOpenIssues: async (...args) => {
-      calls.listOpenIssues = args;
-      return (
-        opts.issues ?? [
-          { id: "i1", identifier: "SER-9", title: "Fix drag", description: "desc", url: "u" },
-        ]
-      );
-    },
-    moveState: async (id, s) => calls.moveState.push([id, s]),
-    comment: async (id, b) => calls.comments.push([id, b]),
-    updateDescription: async (id, d) => calls.updateDescription.push([id, d]),
-    addLabel: async (id, name) => calls.addLabel.push([id, name]),
-    ...opts.linear,
-  };
+  // Each repo gets its own fake tracker; `opts.tracker` overrides individual methods.
+  const makeTracker =
+    opts.makeTracker ??
+    ((repo) => {
+      calls.makeTracker.push(repo);
+      const tracker = {
+        listOpen: async () => {
+          calls.listOpen.push(repo);
+          return opts.issues ?? [DEFAULT_ISSUE];
+        },
+        comment: async (issue, body) => calls.comments.push([issue.id, body]),
+        addLabel: async (issue, label) => calls.addLabel.push([issue.id, label]),
+        transition: async (issue, step) => calls.transition.push([issue.id, step]),
+        getIssue: async () => DEFAULT_ISSUE,
+        createIssue: async () => DEFAULT_ISSUE,
+        ...opts.tracker,
+      };
+      trackers.push(tracker);
+      return tracker;
+    });
   const gh = {
     createPR: (a) => {
       calls.createPR.push(a);
@@ -60,21 +92,9 @@ function makeDeps(opts = {}) {
       return agentResults[Math.min(agentCall++, agentResults.length - 1)];
     },
   };
+  const repo = { ...defaultRepo(), ...opts.repo };
   const config = {
-    repos: [
-      {
-        name: "tiktak",
-        path: "/r",
-        team: "SER",
-        project: "tik-tak",
-        remote: "g",
-        gates: [
-          { name: "test", cmd: "npm", args: ["test"] },
-          { name: "tsc", cmd: "npx", args: ["tsc", "--noEmit"] },
-          { name: "lint", cmd: "npm", args: ["run", "lint"] },
-        ],
-      },
-    ],
+    repos: opts.repos ?? [repo],
     attempts: 2,
     timeoutMs: 1,
     thinking: "medium",
@@ -84,7 +104,7 @@ function makeDeps(opts = {}) {
   const loop = createLoop({
     config,
     skillPath: "/sk.md",
-    linear,
+    makeTracker,
     git,
     gates,
     gh,
@@ -93,27 +113,47 @@ function makeDeps(opts = {}) {
     readPlan: opts.readPlan ?? (() => null),
     log: opts.log ?? (() => {}),
   });
-  return { loop, calls };
+  return { loop, calls, trackers };
 }
 
 test("happy path: claim, branch, PR, comment, back to master", async () => {
-  const { loop, calls } = makeDeps();
+  const { loop, calls } = makeDeps({ readPlan: () => "# plan" });
   const results = await loop(false);
   assert.equal(results[0].outcome, "pr");
-  assert.deepEqual(calls.moveState[0], ["i1", "In Progress"]);
+  assert.deepEqual(calls.transition, [["i1", "claim"]]);
+  assert.equal(calls.createBranch.length, 1);
   assert.deepEqual(calls.createBranch[0], ["/r", "SER-9-fix-drag"]);
   assert.equal(calls.runAgent.length, 1);
   assert.equal(calls.createPR[0].head, "SER-9-fix-drag");
-  assert.ok(calls.comments.some(([, body]) => /PR opened/.test(body)));
+  const bodies = calls.comments.map(([, b]) => b);
+  assert.ok(
+    bodies.some((b) => /implementing SER-9/.test(b)),
+    "expected a claim comment",
+  );
+  assert.ok(
+    bodies.some((b) => /run parameters/.test(b)),
+    "expected a run-parameters comment",
+  );
+  assert.ok(
+    bodies.some((b) => /## Implementation Plan/.test(b)),
+    "expected a plan comment",
+  );
+  assert.ok(
+    bodies.some((b) => /PR opened/.test(b)),
+    "expected a PR comment",
+  );
+  assert.deepEqual(calls.addLabel, []);
   assert.equal(calls.checkout.length, 2);
 });
 
-test("processRepo passes the repo to listOpenIssues", async () => {
+test("processRepo builds a tracker for the repo and lists through it", async () => {
   const { loop, calls } = makeDeps();
   await loop(false);
-  assert.equal(calls.listOpenIssues.length, 1);
-  assert.equal(calls.listOpenIssues[0].team, "SER");
-  assert.equal(calls.listOpenIssues[0].project, "tik-tak");
+  assert.equal(calls.makeTracker.length, 1);
+  assert.equal(calls.makeTracker[0].team, "SER");
+  assert.equal(calls.makeTracker[0].project, "tik-tak");
+  assert.equal(calls.listOpen.length, 1);
+  assert.equal(calls.listOpen[0], calls.makeTracker[0]);
 });
 
 test("PR body links to the Linear issue", async () => {
@@ -122,6 +162,22 @@ test("PR body links to the Linear issue", async () => {
   assert.equal(results[0].outcome, "pr");
   assert.match(calls.createPR[0].body, /## Linear/);
   assert.match(calls.createPR[0].body, /\[SER-9\]\(u\)/);
+});
+
+test("PR body uses the Jira header for a jira repo", async () => {
+  const logs = [];
+  const { loop, calls } = makeDeps({
+    repo: { provider: "jira", jiraProject: "PROJ", project: undefined },
+    log: (m) => logs.push(m),
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "pr");
+  assert.match(calls.createPR[0].body, /## Jira/);
+  assert.doesNotMatch(calls.createPR[0].body, /## Linear/);
+  assert.ok(
+    logs.some((l) => /project PROJ/.test(l)),
+    `expected the jira project in the log, got: ${logs.join(" | ")}`,
+  );
 });
 
 test("repair pass runs when the first attempt fails", async () => {
@@ -137,7 +193,7 @@ test("repair pass runs when the first attempt fails", async () => {
   assert.match(calls.runAgent[1].message, /did not pass verification/);
 });
 
-test("failure path after two failures: comment, push, return to Todo", async () => {
+test("failure path after two failures: comment, push, reopen", async () => {
   const { loop, calls } = makeDeps({
     agentResults: [
       { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
@@ -151,10 +207,11 @@ test("failure path after two failures: comment, push, return to Todo", async () 
   assert.equal(results[0].outcome, "failed");
   assert.equal(calls.pushBranch.length, 1);
   assert.equal(calls.createPR.length, 0);
-  assert.deepEqual(calls.moveState, [
-    ["i1", "In Progress"],
-    ["i1", "Todo"],
+  assert.deepEqual(calls.transition, [
+    ["i1", "claim"],
+    ["i1", "reopen"],
   ]);
+  assert.equal(calls.addLabel.length, 0);
 });
 
 test("preflight skips a dirty repo", async () => {
@@ -165,20 +222,24 @@ test("preflight skips a dirty repo", async () => {
 });
 
 test("dry-run makes no mutations", async () => {
-  const { loop, calls } = makeDeps();
+  const logs = [];
+  const { loop, calls } = makeDeps({ log: (m) => logs.push(m) });
   const results = await loop(true);
   assert.equal(results[0].outcome, "dry");
-  assert.equal(calls.moveState.length, 0);
+  assert.equal(calls.transition.length, 0);
   assert.equal(calls.createBranch.length, 0);
   assert.equal(calls.runAgent.length, 0);
   assert.equal(calls.createPR.length, 0);
+  assert.ok(
+    logs.some((l) => /→ In Progress/.test(l)),
+    `expected the configured claim target in dry-run logs, got: ${logs.join(" | ")}`,
+  );
 });
 
 test("posts the plan as a comment on success", async () => {
   const { loop, calls } = makeDeps({ readPlan: () => "# plan" });
   const results = await loop(false);
   assert.equal(results[0].outcome, "pr");
-  assert.equal(calls.updateDescription.length, 0);
   const planComment = calls.comments
     .map(([, b]) => b)
     .find((b) => /## Implementation Plan/.test(b));
@@ -199,7 +260,6 @@ test("posts the plan as a comment on failure too", async () => {
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "failed");
-  assert.equal(calls.updateDescription.length, 0);
   const planComment = calls.comments
     .map(([, b]) => b)
     .find((b) => /## Implementation Plan/.test(b));
@@ -211,7 +271,6 @@ test("skips the plan comment when no plan was produced", async () => {
   const { loop, calls } = makeDeps({ readPlan: () => null });
   const results = await loop(false);
   assert.equal(results[0].outcome, "pr");
-  assert.equal(calls.updateDescription.length, 0);
   assert.ok(!calls.comments.some(([, b]) => /## Implementation Plan/.test(b)));
 });
 
@@ -287,22 +346,22 @@ test("failure-path comment error does not abort the run", async () => {
     gates: {
       runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }),
     },
-    linear: {
-      comment: async (id, b) => {
-        if (/could not complete/.test(b)) throw new Error("linear down");
-        calls.comments.push([id, b]);
+    tracker: {
+      comment: async (issue, body) => {
+        if (/could not complete/.test(body)) throw new Error("tracker down");
+        calls.comments.push([issue.id, body]);
       },
     },
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "failed");
-  assert.deepEqual(calls.moveState, [
-    ["i1", "In Progress"],
-    ["i1", "Todo"],
+  assert.deepEqual(calls.transition, [
+    ["i1", "claim"],
+    ["i1", "reopen"],
   ]);
 });
 
-test("failure-path moveState error does not abort the run", async () => {
+test("failure-path reopen error does not abort the run", async () => {
   const { loop, calls } = makeDeps({
     agentResults: [
       { exitCode: 1, timedOut: false, stdout: "", stderr: "" },
@@ -311,15 +370,32 @@ test("failure-path moveState error does not abort the run", async () => {
     gates: {
       runGates: () => ({ green: false, results: [{ name: "test", passed: false, output: "" }] }),
     },
-    linear: {
-      moveState: async (id, s) => {
-        calls.moveState.push([id, s]);
-        if (s === "Todo") throw new Error("linear down");
+    tracker: {
+      transition: async (issue, step) => {
+        calls.transition.push([issue.id, step]);
+        if (step === "reopen") throw new Error("tracker down");
       },
     },
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "failed");
+});
+
+test("claim transition failure skips the issue without running the agent", async () => {
+  const { loop, calls } = makeDeps({
+    tracker: {
+      transition: async (issue, step) => {
+        calls.transition.push([issue.id, step]);
+        if (step === "claim") throw new Error("jira down");
+      },
+    },
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "skipped");
+  assert.deepEqual(calls.transition, [["i1", "claim"]]);
+  assert.equal(calls.runAgent.length, 0);
+  assert.equal(calls.createPR.length, 0);
+  assert.equal(calls.createBranch.length, 0);
 });
 
 test("cleanup checkout error after PR does not abort the run", async () => {
@@ -375,11 +451,32 @@ test("unknown model alias fails before claiming or branching", async () => {
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "config-error");
-  assert.deepEqual(calls.moveState, [["i1", "Backlog"]]);
+  assert.deepEqual(calls.transition, [["i1", "park"]]);
   assert.deepEqual(calls.addLabel, [["i1", "ai:error"]]);
   assert.match(calls.comments[0][1], /unknown model alias/);
   assert.equal(calls.runAgent.length, 0);
   assert.equal(calls.createBranch.length, 0);
+});
+
+test("config error uses the repo's error label and parks the issue", async () => {
+  const { loop, calls } = makeDeps({
+    repo: { labels: { pick: "ai", error: "broken" } },
+    issues: [
+      {
+        id: "i1",
+        identifier: "SER-9",
+        title: "t",
+        description: "",
+        url: "u",
+        labels: ["model-nope"],
+      },
+    ],
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "config-error");
+  assert.deepEqual(calls.addLabel, [["i1", "broken"]]);
+  assert.deepEqual(calls.transition, [["i1", "park"]]);
+  assert.match(calls.comments[0][1], /unknown model alias/);
 });
 
 test("conflicting effort labels fail with a config-error", async () => {
@@ -398,7 +495,7 @@ test("conflicting effort labels fail with a config-error", async () => {
   });
   const results = await loop(false);
   assert.equal(results[0].outcome, "config-error");
-  assert.deepEqual(calls.moveState, [["i1", "Backlog"]]);
+  assert.deepEqual(calls.transition, [["i1", "park"]]);
   assert.equal(calls.runAgent.length, 0);
 });
 
@@ -424,13 +521,19 @@ test("dry-run reports resolved params without mutating", async () => {
     logs.some((l) => /openai\/x/.test(l)),
     `expected the resolved model in dry-run logs, got: ${logs.join(" | ")}`,
   );
-  assert.equal(calls.moveState.length, 0);
+  assert.equal(calls.transition.length, 0);
   assert.equal(calls.addLabel.length, 0);
   assert.equal(calls.runAgent.length, 0);
 });
 
 test("dry-run flags a config-error without mutating", async () => {
+  const logs = [];
   const { loop, calls } = makeDeps({
+    log: (m) => logs.push(m),
+    repo: {
+      labels: { pick: "ai", error: "broken" },
+      workflow: { open: "Todo", claim: "In Progress", reopen: "Todo" },
+    },
     issues: [
       {
         id: "i1",
@@ -444,8 +547,45 @@ test("dry-run flags a config-error without mutating", async () => {
   });
   const results = await loop(true);
   assert.equal(results[0].outcome, "config-error");
-  assert.equal(calls.moveState.length, 0);
+  assert.equal(calls.transition.length, 0);
   assert.equal(calls.addLabel.length, 0);
+  assert.ok(
+    logs.some((l) => /broken/.test(l)),
+    `expected the repo's error label in dry-run logs, got: ${logs.join(" | ")}`,
+  );
+  assert.ok(!logs.some((l) => /Backlog/.test(l)), "no park target is configured");
+});
+
+test("mixed config: linear and jira repos are each driven by their own tracker", async () => {
+  const linearRepo = { ...defaultRepo(), name: "lin", path: "/r1" };
+  const jiraRepo = {
+    ...defaultRepo(),
+    name: "jir",
+    path: "/r2",
+    provider: "jira",
+    jiraProject: "PROJ",
+    team: undefined,
+    project: undefined,
+  };
+  const { loop, calls, trackers } = makeDeps({ repos: [linearRepo, jiraRepo] });
+  const results = await loop(false);
+  assert.equal(trackers.length, 2);
+  assert.notEqual(trackers[0], trackers[1]);
+  assert.deepEqual(
+    calls.listOpen.map((r) => r.name),
+    ["lin", "jir"],
+  );
+  assert.deepEqual(
+    results.map((r) => r.identifier),
+    ["SER-9", "SER-9"],
+  );
+  assert.deepEqual(
+    results.map((r) => r.outcome),
+    ["pr", "pr"],
+  );
+  const bodies = calls.createPR.map((p) => p.body);
+  assert.equal(bodies.filter((b) => /## Linear/.test(b)).length, 1);
+  assert.equal(bodies.filter((b) => /## Jira/.test(b)).length, 1);
 });
 
 test("posts a run-parameters comment with the resolved model and effort", async () => {

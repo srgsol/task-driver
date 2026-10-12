@@ -19,9 +19,11 @@ const BASE_BRANCH = "master";
  * @typedef {object} RepoConfig
  * @property {string} name
  * @property {string} path
- * @property {string} team
- * @property {string} project
- * @property {{ open: string | string[] }} workflow
+ * @property {"linear" | "jira"} [provider] Defaults to "linear" (normalized by config).
+ * @property {string} [team] Linear only.
+ * @property {string} [project] Linear only.
+ * @property {string} [jiraProject] Jira only.
+ * @property {{ open: string | string[]; claim: string; reopen?: string; park?: string }} workflow
  * @property {{ pick: string; error: string }} labels
  * @property {string} remote
  * @property {GateConfig[]} gates
@@ -39,7 +41,7 @@ const BASE_BRANCH = "master";
  * @property {string} id
  * @property {string} identifier
  * @property {string} title
- * @property {string | null} description
+ * @property {string | null} [description]
  * @property {string} url
  * @property {string[]} [labels]
  *
@@ -59,11 +61,13 @@ const BASE_BRANCH = "master";
  * @property {string} stdout
  * @property {string} stderr
  *
- * @typedef {object} LinearClient
- * @property {(issueId: string, stateName: string) => Promise<void>} moveState
- * @property {(issueId: string, body: string) => Promise<void>} comment
- * @property {(issueId: string, labelName: string) => Promise<void>} addLabel
- * @property {(repo: RepoConfig) => Promise<Issue[]>} listOpenIssues
+ * @typedef {object} Tracker
+ * @property {() => Promise<Issue[]>} listOpen
+ * @property {(issue: Issue, body: string) => Promise<void>} comment
+ * @property {(issue: Issue, label: string) => Promise<void>} addLabel
+ * @property {(issue: Issue, step: "claim" | "reopen" | "park") => Promise<void>} transition
+ * @property {(identifier: string) => Promise<Issue>} getIssue
+ * @property {(input: any) => Promise<Issue>} createIssue
  *
  * @typedef {object} Git
  * @property {(repoPath: string) => boolean} isClean
@@ -103,7 +107,7 @@ const BASE_BRANCH = "master";
  * @typedef {object} LoopDeps
  * @property {Config} config
  * @property {string} skillPath
- * @property {LinearClient} linear
+ * @property {(repo: RepoConfig) => Tracker} makeTracker
  * @property {Git} git
  * @property {Gates} gates
  * @property {Gh} gh
@@ -114,7 +118,7 @@ const BASE_BRANCH = "master";
  */
 
 /**
- * Format the implementation plan as the body of a Linear comment.
+ * Format the implementation plan as the body of a tracker comment.
  *
  * @param {string} plan
  * @returns {string}
@@ -132,7 +136,7 @@ export function formatPlanComment(plan) {
 export function createLoop({
   config,
   skillPath,
-  linear,
+  makeTracker,
   git,
   gates,
   gh,
@@ -223,7 +227,7 @@ export function createLoop({
 
   /**
    * Run a cleanup/notification step, logging (but not propagating) failures so that a single
-   * git/Linear hiccup can't abort the rest of the run.
+   * git/tracker hiccup can't abort the rest of the run.
    *
    * @param {string} label
    * @param {() => void | Promise<void>} action
@@ -239,10 +243,11 @@ export function createLoop({
 
   /**
    * @param {RepoConfig} repo
+   * @param {Tracker} tracker
    * @param {Issue} issue
    * @param {boolean} dryRun
    */
-  async function processIssue(repo, issue, dryRun) {
+  async function processIssue(repo, tracker, issue, dryRun) {
     const branch = branchName(issue.identifier, issue.title);
     const sessionId = `task-driver-${repo.name}-${issue.identifier}`;
     const logPath = join(workRoot, repo.name, "logs", `${sessionId}.jsonl`);
@@ -251,27 +256,31 @@ export function createLoop({
 
     if (!params.ok) {
       if (dryRun) {
-        log(`  [dry] would flag ${issue.identifier}: ${params.error} (ai:error + Backlog)`);
+        log(
+          `  [dry] would flag ${issue.identifier}: ${params.error} (${repo.labels.error}${
+            repo.workflow.park ? ` + ${repo.workflow.park}` : ""
+          })`,
+        );
         return { identifier: issue.identifier, outcome: "config-error" };
       }
       log(`→ ${issue.identifier}: config error — ${params.error}`);
       await bestEffort(`${issue.identifier}: could not post config-error note`, () =>
-        linear.comment(
-          issue.id,
+        tracker.comment(
+          issue,
           `❌ task-driver: ${params.error}. Fix the label or add the alias to task-driver.config.json.`,
         ),
       );
-      await bestEffort(`${issue.identifier}: could not add ai:error label`, () =>
-        linear.addLabel(issue.id, "ai:error"),
+      await bestEffort(`${issue.identifier}: could not add the error label`, () =>
+        tracker.addLabel(issue, repo.labels.error),
       );
-      await bestEffort(`${issue.identifier}: could not move to Backlog`, () =>
-        linear.moveState(issue.id, "Backlog"),
+      await bestEffort(`${issue.identifier}: could not park the issue`, () =>
+        tracker.transition(issue, "park"),
       );
       return { identifier: issue.identifier, outcome: "config-error" };
     }
 
     if (dryRun) {
-      log(`  [dry] would claim ${issue.identifier} → In Progress`);
+      log(`  [dry] would claim ${issue.identifier} → ${repo.workflow.claim}`);
       log(`  [dry] would branch ${branch} from ${BASE_BRANCH}`);
       log(
         `  [dry] would run pi (session ${sessionId}) with model ${params.model ?? "(default)"}, thinking ${params.thinking}`,
@@ -287,9 +296,9 @@ export function createLoop({
       .filter(Boolean)
       .join(", ");
     try {
-      await linear.moveState(issue.id, "In Progress");
-      await linear.comment(
-        issue.id,
+      await tracker.transition(issue, "claim");
+      await tracker.comment(
+        issue,
         `🤖 task-driver: implementing ${issue.identifier} on branch \`${branch}\`${detail ? ` (${detail})` : ""}`,
       );
     } catch (err) {
@@ -308,7 +317,7 @@ export function createLoop({
       }`,
     ].join(", ");
     await bestEffort(`${issue.identifier}: could not post run-parameters comment`, () =>
-      linear.comment(issue.id, `⚙️ task-driver run parameters — ${paramSummary}`),
+      tracker.comment(issue, `⚙️ task-driver run parameters — ${paramSummary}`),
     );
 
     log(`→ ${issue.identifier}: ${issue.title} (${branch})`);
@@ -357,7 +366,7 @@ export function createLoop({
 
     if (plan) {
       try {
-        await linear.comment(issue.id, formatPlanComment(plan));
+        await tracker.comment(issue, formatPlanComment(plan));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log(`  ⚠️  ${issue.identifier}: could not post plan comment (${message})`);
@@ -367,10 +376,10 @@ export function createLoop({
     }
 
     if (v.ok) {
-      const linearLink = issue.url ? `[${issue.identifier}](${issue.url})` : issue.identifier;
+      const issueLink = issue.url ? `[${issue.identifier}](${issue.url})` : issue.identifier;
       const body = [
-        "## Linear",
-        linearLink,
+        `## ${repo.provider === "jira" ? "Jira" : "Linear"}`,
+        issueLink,
         "",
         "## Plan",
         plan || "(none)",
@@ -386,7 +395,7 @@ export function createLoop({
           title: issue.title,
           body,
         });
-        await linear.comment(issue.id, `✅ PR opened: ${pr.url}\n\n${gatesSummary(v.gatesResult)}`);
+        await tracker.comment(issue, `✅ PR opened: ${pr.url}\n\n${gatesSummary(v.gatesResult)}`);
         log(`  ✅ ${issue.identifier}: PR ${pr.url} (${branch})`);
         await bestEffort(`${issue.identifier}: could not return to ${BASE_BRANCH}`, () =>
           git.checkout(repo.path, BASE_BRANCH),
@@ -396,8 +405,8 @@ export function createLoop({
         const message = err instanceof Error ? err.message : String(err);
         log(`  ⚠️  ${issue.identifier}: PR create failed: ${message}`);
         await bestEffort(`${issue.identifier}: could not post PR-failure note`, () =>
-          linear.comment(
-            issue.id,
+          tracker.comment(
+            issue,
             `⚠️ task-driver: code done and pushed on \`${branch}\`, but PR creation failed: ${message}`,
           ),
         );
@@ -425,10 +434,10 @@ export function createLoop({
       /* ignore */
     }
     await bestEffort(`${issue.identifier}: could not post failure note`, () =>
-      linear.comment(issue.id, note),
+      tracker.comment(issue, note),
     );
-    await bestEffort(`${issue.identifier}: could not move back to Todo`, () =>
-      linear.moveState(issue.id, "Todo"),
+    await bestEffort(`${issue.identifier}: could not reopen the issue`, () =>
+      tracker.transition(issue, "reopen"),
     );
     log(`  ❌ ${issue.identifier}: failed (branch ${branch} pushed, no PR)`);
     await bestEffort(`${issue.identifier}: could not return to ${BASE_BRANCH}`, () =>
@@ -453,10 +462,13 @@ export function createLoop({
         return [];
       }
     }
-    const issues = await linear.listOpenIssues(repo);
-    log(`${repo.name} (project ${repo.project}): ${issues.length} open task-driver issue(s)`);
+    const tracker = makeTracker(repo);
+    const issues = await tracker.listOpen();
+    log(
+      `${repo.name} (project ${repo.project ?? repo.jiraProject}): ${issues.length} open task-driver issue(s)`,
+    );
     const results = [];
-    for (const issue of issues) results.push(await processIssue(repo, issue, dryRun));
+    for (const issue of issues) results.push(await processIssue(repo, tracker, issue, dryRun));
     return results;
   }
 
