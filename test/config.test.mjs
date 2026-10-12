@@ -151,3 +151,131 @@ test("validateConfig rejects a non-object efforts map", () => {
     /efforts must be an object/,
   );
 });
+
+const JIRA_BASE_URL = "https://x.atlassian.net";
+
+const jiraRepo = (overrides = {}) => ({
+  name: "company-repo",
+  path: "../company-repo",
+  provider: "jira",
+  jiraProject: "PROJ",
+  remote: "git@github.com:example/company-repo.git",
+  gates: [],
+  workflow: { open: ["To Do"], claim: "In Progress" },
+  labels: { pick: "task-driver", error: "ai:error" },
+  ...overrides,
+});
+
+test("validateConfig normalizes provider, workflow, and labels per repo", () => {
+  const c = validateConfig({ repos: [repo(), jiraRepo()], jiraBaseUrl: JIRA_BASE_URL });
+  const [linear, jira] = c.repos;
+  assert.equal(linear.provider, "linear");
+  assert.deepEqual(linear.workflow, {
+    open: "Todo",
+    claim: "In Progress",
+    reopen: "Todo",
+    park: "Backlog",
+  });
+  assert.deepEqual(linear.labels, { pick: "task-driver", error: "ai:error" });
+  assert.equal(jira.provider, "jira");
+  assert.equal(jira.jiraProject, "PROJ");
+  assert.deepEqual(jira.workflow, { open: ["To Do"], claim: "In Progress" });
+  assert.deepEqual(jira.labels, { pick: "task-driver", error: "ai:error" });
+  assert.ok(!("team" in jira));
+  assert.equal(c.jiraBaseUrl, JIRA_BASE_URL);
+});
+
+test("validateConfig merges linear workflow overrides over the defaults", () => {
+  const c = validateConfig({ repos: [repo({ workflow: { open: "Ready" } })] });
+  assert.deepEqual(c.repos[0].workflow, {
+    open: "Ready",
+    claim: "In Progress",
+    reopen: "Todo",
+    park: "Backlog",
+  });
+});
+
+test("validateConfig does not require jiraBaseUrl without jira repos", () => {
+  const c = validateConfig({ repos: [repo()] });
+  assert.equal(c.jiraBaseUrl, undefined);
+});
+
+test("validateConfig requires jiraProject for jira repos", () => {
+  assert.throws(
+    () =>
+      validateConfig({ repos: [jiraRepo({ jiraProject: undefined })], jiraBaseUrl: JIRA_BASE_URL }),
+    /requires jiraProject when provider is jira/,
+  );
+});
+
+test("validateConfig requires jiraBaseUrl when any repo is jira", () => {
+  assert.throws(
+    () => validateConfig({ repos: [jiraRepo()] }),
+    /jiraBaseUrl is required when any repo uses provider jira/,
+  );
+});
+
+test("validateConfig rejects a non-http(s) jiraBaseUrl", () => {
+  assert.throws(
+    () => validateConfig({ repos: [jiraRepo()], jiraBaseUrl: "atlassian.net" }),
+    /jiraBaseUrl must be a valid http\(s\) URL/,
+  );
+});
+
+test("validateConfig rejects a linear workflow.open that is an array", () => {
+  assert.throws(
+    () => validateConfig({ repos: [repo({ workflow: { open: ["To Do"] } })] }),
+    /workflow\.open must be a non-empty string$/,
+  );
+});
+
+test("validateConfig rejects a jira workflow without open", () => {
+  assert.throws(
+    () => validateConfig({ repos: [jiraRepo({ workflow: {} })], jiraBaseUrl: JIRA_BASE_URL }),
+    /workflow\.open must be a non-empty string or array of strings/,
+  );
+});
+
+test("validateConfig rejects a jira workflow without claim", () => {
+  assert.throws(
+    () =>
+      validateConfig({
+        repos: [jiraRepo({ workflow: { open: "To Do" } })],
+        jiraBaseUrl: JIRA_BASE_URL,
+      }),
+    /workflow\.claim must be a non-empty string/,
+  );
+});
+
+test("validateConfig rejects an unknown provider", () => {
+  assert.throws(
+    () => validateConfig({ repos: [repo({ provider: "jiras" })] }),
+    /provider must be 'linear' or 'jira'/,
+  );
+});
+
+test("validateConfig passes jiraIssueType and jiraBlockingLinkTypes through", () => {
+  const c = validateConfig({
+    repos: [jiraRepo({ jiraIssueType: "Bug", jiraBlockingLinkTypes: ["is blocked by"] })],
+    jiraBaseUrl: JIRA_BASE_URL,
+  });
+  assert.equal(c.repos[0].jiraIssueType, "Bug");
+  assert.deepEqual(c.repos[0].jiraBlockingLinkTypes, ["is blocked by"]);
+  assert.equal(c.repos[0].workflow.reopen, undefined);
+  assert.equal(c.repos[0].workflow.park, undefined);
+});
+
+test("validateConfig rejects an invalid jiraBlockingLinkTypes", () => {
+  const bad = (jiraBlockingLinkTypes) =>
+    validateConfig({ repos: [jiraRepo({ jiraBlockingLinkTypes })], jiraBaseUrl: JIRA_BASE_URL });
+  assert.throws(() => bad([]), /jiraBlockingLinkTypes must be a non-empty array of strings/);
+  assert.throws(
+    () => bad(["ok", ""]),
+    /jiraBlockingLinkTypes must be a non-empty array of strings/,
+  );
+  assert.throws(() => bad("blocks"), /jiraBlockingLinkTypes must be a non-empty array of strings/);
+  assert.throws(
+    () => validateConfig({ repos: [repo({ jiraBlockingLinkTypes: [] })] }),
+    /jiraBlockingLinkTypes must be a non-empty array of strings/,
+  );
+});

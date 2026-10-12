@@ -14,21 +14,44 @@ export const DEFAULTS = {
   thinking: "medium",
 };
 
+/** Linear workflow defaults; they preserve today's behavior for existing configs. */
+const LINEAR_WORKFLOW = { open: "Todo", claim: "In Progress", reopen: "Todo", park: "Backlog" };
+
+/** Label defaults applied to every repo unless the config overrides them. */
+const LABEL_DEFAULTS = { pick: "task-driver", error: "ai:error" };
+
 /**
  * @typedef {{ name: string; cmd: string; args: string[] }} GateConfig
  *
  * @typedef {{
+ *   open: string | string[];
+ *   claim: string;
+ *   reopen?: string;
+ *   park?: string;
+ * }} WorkflowConfig
+ *
+ *
+ * @typedef {{ pick: string; error: string }} LabelConfig
+ *
+ * @typedef {{
  *   name: string;
  *   path: string;
+ *   provider: "linear" | "jira";
  *   team: string;
  *   project: string;
+ *   jiraProject?: string;
+ *   jiraIssueType?: string;
+ *   jiraBlockingLinkTypes?: string[];
  *   remote: string;
  *   gates: GateConfig[];
+ *   workflow: WorkflowConfig;
+ *   labels: LabelConfig;
  * }} RepoConfig
  *
  *
  * @typedef {{
  *   repos: RepoConfig[];
+ *   jiraBaseUrl?: string;
  *   attempts: number;
  *   timeoutMs: number;
  *   gateTimeoutMs: number;
@@ -49,21 +72,105 @@ export function validateConfig(raw) {
   if (!Array.isArray(raw.repos) || raw.repos.length === 0) {
     throw new Error("config.repos must be a non-empty array");
   }
+  /** @type {RepoConfig[]} */
   const repos = raw.repos.map((/** @type {RepoConfig} */ r, /** @type {number} */ i) => {
-    if (!r.name || !r.path || !r.team || !r.project || !r.remote) {
-      throw new Error(`config.repos[${i}] must define name, path, team, project, remote`);
+    const provider = r.provider ?? "linear";
+    if (provider !== "linear" && provider !== "jira") {
+      throw new Error(`config.repos[${i}].provider must be 'linear' or 'jira'`);
+    }
+    // `team` and `project` are used only by the Linear provider; Jira repos omit them.
+    if (provider === "linear") {
+      if (!r.name || !r.path || !r.team || !r.project || !r.remote) {
+        throw new Error(`config.repos[${i}] must define name, path, team, project, remote`);
+      }
+    } else if (!r.name || !r.path || !r.remote) {
+      throw new Error(`config.repos[${i}] must define name, path, remote`);
     }
     if (r.gates !== undefined && !Array.isArray(r.gates)) {
       throw new Error(`config.repos[${i}].gates must be an array`);
     }
-    return {
+    if (provider === "jira") {
+      if (typeof r.jiraProject !== "string" || r.jiraProject.trim() === "") {
+        throw new Error(`config.repos[${i}] requires jiraProject when provider is jira`);
+      }
+    }
+    if (r.jiraBlockingLinkTypes !== undefined) {
+      const linkTypes = r.jiraBlockingLinkTypes;
+      if (
+        !Array.isArray(linkTypes) ||
+        linkTypes.length === 0 ||
+        linkTypes.some((t) => typeof t !== "string" || t.trim() === "")
+      ) {
+        throw new Error(
+          `config.repos[${i}].jiraBlockingLinkTypes must be a non-empty array of strings`,
+        );
+      }
+    }
+    const workflow = /** @type {Partial<WorkflowConfig>} */ (r.workflow ?? {});
+    /** @type {WorkflowConfig} */
+    let normalizedWorkflow;
+    if (provider === "linear") {
+      const open = workflow.open ?? LINEAR_WORKFLOW.open;
+      if (typeof open !== "string" || open.trim() === "") {
+        throw new Error(`config.repos[${i}].workflow.open must be a non-empty string`);
+      }
+      const claim = workflow.claim ?? LINEAR_WORKFLOW.claim;
+      if (typeof claim !== "string" || claim.trim() === "") {
+        throw new Error(`config.repos[${i}].workflow.claim must be a non-empty string`);
+      }
+      normalizedWorkflow = {
+        open,
+        claim,
+        reopen: workflow.reopen ?? LINEAR_WORKFLOW.reopen,
+        park: workflow.park ?? LINEAR_WORKFLOW.park,
+      };
+    } else {
+      const open = workflow.open;
+      if (typeof open === "string") {
+        if (open.trim() === "") {
+          throw new Error(
+            `config.repos[${i}].workflow.open must be a non-empty string or array of strings`,
+          );
+        }
+      } else if (
+        !Array.isArray(open) ||
+        open.length === 0 ||
+        open.some((s) => typeof s !== "string" || s.trim() === "")
+      ) {
+        throw new Error(
+          `config.repos[${i}].workflow.open must be a non-empty string or array of strings`,
+        );
+      }
+      const claim = workflow.claim;
+      if (typeof claim !== "string" || claim.trim() === "") {
+        throw new Error(`config.repos[${i}].workflow.claim must be a non-empty string`);
+      }
+      normalizedWorkflow = { open, claim };
+      if (workflow.reopen !== undefined) normalizedWorkflow.reopen = workflow.reopen;
+      if (workflow.park !== undefined) normalizedWorkflow.park = workflow.park;
+    }
+    const labels = /** @type {LabelConfig} */ ({ ...LABEL_DEFAULTS, ...(r.labels ?? {}) });
+    if (typeof labels.pick !== "string" || labels.pick.trim() === "") {
+      throw new Error(`config.repos[${i}].labels.pick must be a non-empty string`);
+    }
+    if (typeof labels.error !== "string" || labels.error.trim() === "") {
+      throw new Error(`config.repos[${i}].labels.error must be a non-empty string`);
+    }
+    return /** @type {RepoConfig} */ ({
       name: r.name,
       path: r.path,
-      team: r.team,
-      project: r.project,
+      provider,
+      ...(provider === "linear" ? { team: r.team, project: r.project } : {}),
+      ...(provider === "jira" ? { jiraProject: r.jiraProject } : {}),
+      ...(r.jiraIssueType !== undefined ? { jiraIssueType: r.jiraIssueType } : {}),
+      ...(r.jiraBlockingLinkTypes !== undefined
+        ? { jiraBlockingLinkTypes: r.jiraBlockingLinkTypes }
+        : {}),
       remote: r.remote,
       gates: r.gates ?? [],
-    };
+      workflow: normalizedWorkflow,
+      labels,
+    });
   });
   const attempts = raw.attempts ?? DEFAULTS.attempts;
   const timeoutMs = raw.timeoutMs ?? DEFAULTS.timeoutMs;
@@ -93,7 +200,29 @@ export function validateConfig(raw) {
       throw new Error(`config.efforts.${alias} must be one of ${EFFORT_LEVELS.join("|")}`);
     }
   }
-  return { repos, attempts, timeoutMs, gateTimeoutMs, thinking, models, efforts };
+  const jiraBaseUrl = raw.jiraBaseUrl;
+  if (
+    repos.some((r) => r.provider === "jira") &&
+    (typeof jiraBaseUrl !== "string" || jiraBaseUrl.trim() === "")
+  ) {
+    throw new Error("config.jiraBaseUrl is required when any repo uses provider jira");
+  }
+  if (
+    jiraBaseUrl !== undefined &&
+    (typeof jiraBaseUrl !== "string" || !/^https?:\/\//.test(jiraBaseUrl))
+  ) {
+    throw new Error("config.jiraBaseUrl must be a valid http(s) URL");
+  }
+  return {
+    repos,
+    ...(jiraBaseUrl !== undefined ? { jiraBaseUrl } : {}),
+    attempts,
+    timeoutMs,
+    gateTimeoutMs,
+    thinking,
+    models,
+    efforts,
+  };
 }
 
 /**
