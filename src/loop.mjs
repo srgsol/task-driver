@@ -21,6 +21,8 @@ const BASE_BRANCH = "master";
  * @property {string} path
  * @property {string} team
  * @property {string} project
+ * @property {{ open: string | string[] }} workflow
+ * @property {{ pick: string; error: string }} labels
  * @property {string} remote
  * @property {GateConfig[]} gates
  *
@@ -61,7 +63,7 @@ const BASE_BRANCH = "master";
  * @property {(issueId: string, stateName: string) => Promise<void>} moveState
  * @property {(issueId: string, body: string) => Promise<void>} comment
  * @property {(issueId: string, labelName: string) => Promise<void>} addLabel
- * @property {(teamKey: string, projectName: string) => Promise<Issue[]>} listOpenIssues
+ * @property {(repo: RepoConfig) => Promise<Issue[]>} listOpenIssues
  *
  * @typedef {object} Git
  * @property {(repoPath: string) => boolean} isClean
@@ -451,7 +453,7 @@ export function createLoop({
         return [];
       }
     }
-    const issues = await linear.listOpenIssues(repo.team, repo.project);
+    const issues = await linear.listOpenIssues(repo);
     log(`${repo.name} (project ${repo.project}): ${issues.length} open task-driver issue(s)`);
     const results = [];
     for (const issue of issues) results.push(await processIssue(repo, issue, dryRun));

@@ -108,10 +108,12 @@ test("happy path: claim, branch, PR, comment, back to master", async () => {
   assert.equal(calls.checkout.length, 2);
 });
 
-test("processRepo passes repo.project to listOpenIssues", async () => {
+test("processRepo passes the repo to listOpenIssues", async () => {
   const { loop, calls } = makeDeps();
   await loop(false);
-  assert.deepEqual(calls.listOpenIssues, ["SER", "tik-tak"]);
+  assert.equal(calls.listOpenIssues.length, 1);
+  assert.equal(calls.listOpenIssues[0].team, "SER");
+  assert.equal(calls.listOpenIssues[0].project, "tik-tak");
 });
 
 test("PR body links to the Linear issue", async () => {

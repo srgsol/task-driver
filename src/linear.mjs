@@ -74,8 +74,15 @@ function hasUnresolvedBlocker(issue) {
 }
 
 /**
+ * @typedef {object} LinearRepo
+ * @property {string} team Linear team key, e.g. `SER`.
+ * @property {string} project Linear project name.
+ * @property {{ open: string | string[] }} workflow Workflow states; Linear uses `open` as the pick
+ *   state.
+ * @property {{ pick: string; error: string }} labels Pick and re-pick guard labels.
+ *
  * @typedef {object} LinearClient
- * @property {(teamKey: string, projectName: string) => Promise<LinearIssue[]>} listOpenIssues
+ * @property {(repo: LinearRepo) => Promise<LinearIssue[]>} listOpenIssues
  * @property {(identifier: string) => Promise<LinearIssue>} getIssue
  * @property {(input: {
  *   teamId: string;
@@ -253,16 +260,17 @@ export function createLinearClient(apiKey, fetchImpl = fetch, retry = {}) {
 
   return {
     /**
-     * @param {string} teamKey
-     * @param {string} projectName
+     * Pickable issues: open workflow state + pick label, minus error-labeled and blocked issues.
+     *
+     * @param {LinearRepo} repo
      * @returns {Promise<LinearIssue[]>}
      */
-    async listOpenIssues(teamKey, projectName) {
+    async listOpenIssues(repo) {
       const filter = {
-        team: { key: { eq: teamKey } },
-        project: { name: { eq: projectName } },
-        state: { name: { eq: "Todo" } },
-        labels: { name: { eq: "task-driver" } },
+        team: { key: { eq: repo.team } },
+        project: { name: { eq: repo.project } },
+        state: { name: { eq: repo.workflow.open } },
+        labels: { name: { eq: repo.labels.pick } },
       };
 
       /** @type {any[]} */
@@ -277,7 +285,7 @@ export function createLinearClient(apiKey, fetchImpl = fetch, retry = {}) {
                 id identifier title description url
                 relations { nodes { type relatedIssue { state { name } } } }
                 inverseRelations { nodes { type issue { state { name } } } }
-                labels { nodes { name } }
+                labels { nodes { name parent { name } } }
               }
               pageInfo { hasNextPage endCursor }
             }
@@ -297,8 +305,14 @@ export function createLinearClient(apiKey, fetchImpl = fetch, retry = {}) {
         .filter((/** @type {any} */ issue) => !hasUnresolvedBlocker(issue))
         .map((/** @type {any} */ issue) => ({
           ...issue,
-          labels: (issue.labels?.nodes ?? []).map((/** @type {{ name: string }} */ n) => n.name),
-        }));
+          labels: (issue.labels?.nodes ?? []).map(
+            (/** @type {{ name: string; parent?: { name?: string } | null }} */ n) =>
+              n.parent ? `${n.parent.name}:${n.name}` : n.name,
+          ),
+        }))
+        .filter(
+          (/** @type {LinearIssue} */ issue) => !(issue.labels ?? []).includes(repo.labels.error),
+        );
     },
     /**
      * @param {string} identifier

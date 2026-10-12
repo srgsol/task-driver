@@ -12,6 +12,22 @@ function fakeFetch(handler) {
   };
 }
 
+/** A normalized repo config, shaped like `validateConfig` produces for the Linear provider. */
+function linearRepo(overrides = {}) {
+  return {
+    name: "company-repo",
+    path: "/tmp/company-repo",
+    provider: "linear",
+    team: "SER",
+    project: "tik-tak",
+    remote: "git@github.com:example/company-repo.git",
+    gates: [],
+    workflow: { open: "Todo", claim: "In Progress", reopen: "Todo", park: "Backlog" },
+    labels: { pick: "task-driver", error: "ai:error" },
+    ...overrides,
+  };
+}
+
 function jsonResponse(data, status = 200) {
   return { status, text: async () => JSON.stringify({ data }) };
 }
@@ -29,7 +45,7 @@ test("listOpenIssues requests relation fields", async () => {
       return { issues: { nodes: [] } };
     }),
   );
-  await client.listOpenIssues("SER", "tik-tak");
+  await client.listOpenIssues(linearRepo());
   assert.match(seenQuery, /relations/);
   assert.match(seenQuery, /inverseRelations/);
 });
@@ -59,7 +75,7 @@ test("listOpenIssues skips issues blocked by an unresolved issue", async () => {
     "k",
     fakeFetch(() => ({ issues: { nodes } })),
   );
-  const issues = await client.listOpenIssues("SER", "tik-tak");
+  const issues = await client.listOpenIssues(linearRepo());
   assert.deepEqual(
     issues.map((i) => i.identifier),
     ["SER-2"],
@@ -91,7 +107,7 @@ test("listOpenIssues keeps issues whose blocker is Done or Canceled", async () =
     "k",
     fakeFetch(() => ({ issues: { nodes } })),
   );
-  const issues = await client.listOpenIssues("SER", "tik-tak");
+  const issues = await client.listOpenIssues(linearRepo());
   assert.deepEqual(
     issues.map((i) => i.identifier),
     ["SER-1", "SER-2"],
@@ -123,7 +139,7 @@ test("listOpenIssues keeps blockers and non-blocking relations", async () => {
     "k",
     fakeFetch(() => ({ issues: { nodes } })),
   );
-  const issues = await client.listOpenIssues("SER", "tik-tak");
+  const issues = await client.listOpenIssues(linearRepo());
   assert.deepEqual(
     issues.map((i) => i.identifier),
     ["SER-1", "SER-2"],
@@ -143,10 +159,31 @@ test("listOpenIssues filters Todo + task-driver label + project", async () => {
       };
     }),
   );
-  const issues = await client.listOpenIssues("SER", "tik-tak");
+  const issues = await client.listOpenIssues(linearRepo());
   assert.equal(issues.length, 1);
   assert.deepEqual(seen.filter.state, { name: { eq: "Todo" } });
   assert.deepEqual(seen.filter.labels, { name: { eq: "task-driver" } });
+  assert.deepEqual(seen.filter.team, { key: { eq: "SER" } });
+  assert.deepEqual(seen.filter.project, { name: { eq: "tik-tak" } });
+});
+
+test("listOpenIssues filters on the repo's workflow.open and labels.pick", async () => {
+  let seen;
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q, vars) => {
+      seen = vars;
+      return { issues: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } };
+    }),
+  );
+  await client.listOpenIssues(
+    linearRepo({
+      workflow: { open: "WIP", claim: "In Progress" },
+      labels: { pick: "auto", error: "ai:error" },
+    }),
+  );
+  assert.deepEqual(seen.filter.state, { name: { eq: "WIP" } });
+  assert.deepEqual(seen.filter.labels, { name: { eq: "auto" } });
   assert.deepEqual(seen.filter.team, { key: { eq: "SER" } });
   assert.deepEqual(seen.filter.project, { name: { eq: "tik-tak" } });
 });
@@ -246,8 +283,76 @@ test("listOpenIssues exposes label leaf names", async () => {
     "k",
     fakeFetch(() => ({ issues: { nodes } })),
   );
-  const issues = await client.listOpenIssues("SER", "tik-tak");
+  const issues = await client.listOpenIssues(linearRepo());
   assert.deepEqual(issues[0].labels, ["task-driver", "model-fast"]);
+});
+
+test("listOpenIssues maps grouped labels to group:leaf", async () => {
+  const nodes = [
+    {
+      id: "i1",
+      identifier: "SER-1",
+      title: "t",
+      description: null,
+      url: "u1",
+      relations: { nodes: [] },
+      inverseRelations: { nodes: [] },
+      labels: {
+        nodes: [
+          { name: "error", parent: { name: "ai" } },
+          { name: "task-driver", parent: null },
+        ],
+      },
+    },
+  ];
+  const client = createLinearClient(
+    "k",
+    fakeFetch(() => ({ issues: { nodes } })),
+  );
+  // A non-matching error label keeps this issue past the re-pick guard so the mapping is visible.
+  const issues = await client.listOpenIssues(
+    linearRepo({ labels: { pick: "task-driver", error: "ai:failed" } }),
+  );
+  assert.deepEqual(issues[0].labels, ["ai:error", "task-driver"]);
+});
+
+test("listOpenIssues drops issues already carrying the error label", async () => {
+  const nodes = [
+    {
+      id: "i1",
+      identifier: "SER-1",
+      title: "errored",
+      description: null,
+      url: "u1",
+      relations: { nodes: [] },
+      inverseRelations: { nodes: [] },
+      labels: {
+        nodes: [
+          { name: "error", parent: { name: "ai" } },
+          { name: "task-driver", parent: null },
+        ],
+      },
+    },
+    {
+      id: "i2",
+      identifier: "SER-2",
+      title: "fresh",
+      description: null,
+      url: "u2",
+      relations: { nodes: [] },
+      inverseRelations: { nodes: [] },
+      labels: { nodes: [{ name: "task-driver", parent: null }] },
+    },
+  ];
+  const client = createLinearClient(
+    "k",
+    fakeFetch(() => ({ issues: { nodes } })),
+  );
+  const issues = await client.listOpenIssues(linearRepo());
+  assert.deepEqual(
+    issues.map((i) => i.identifier),
+    ["SER-2"],
+  );
 });
 
 test("listOpenIssues requests the labels field", async () => {
@@ -259,8 +364,9 @@ test("listOpenIssues requests the labels field", async () => {
       return { issues: { nodes: [] } };
     }),
   );
-  await client.listOpenIssues("SER", "tik-tak");
+  await client.listOpenIssues(linearRepo());
   assert.match(q, /labels\s*\{\s*nodes\s*\{\s*name/);
+  assert.match(q, /parent\s*\{\s*name\s*\}/);
 });
 
 test("listOpenIssues requests page info and passes the after cursor", async () => {
@@ -274,7 +380,7 @@ test("listOpenIssues requests page info and passes the after cursor", async () =
       return { issues: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } };
     }),
   );
-  await client.listOpenIssues("SER", "tik-tak");
+  await client.listOpenIssues(linearRepo());
   assert.match(query, /pageInfo\s*\{\s*hasNextPage\s+endCursor\s*\}/);
   assert.equal(after, undefined);
 });
@@ -302,7 +408,7 @@ test("listOpenIssues pages until hasNextPage is false", async () => {
       return { issues: pages[afterArgs.length - 1] };
     }),
   );
-  const issues = await client.listOpenIssues("SER", "tik-tak");
+  const issues = await client.listOpenIssues(linearRepo());
   assert.deepEqual(
     issues.map((i) => i.identifier),
     ["SER-1", "SER-2", "SER-3"],
@@ -317,7 +423,7 @@ test("listOpenIssues throws rather than looping when a page has no end cursor", 
       issues: { nodes: [], pageInfo: { hasNextPage: true, endCursor: null } },
     })),
   );
-  await assert.rejects(() => client.listOpenIssues("SER", "tik-tak"), /endCursor/);
+  await assert.rejects(() => client.listOpenIssues(linearRepo()), /endCursor/);
 });
 
 test("addLabel reuses an existing grouped label", async () => {
@@ -434,7 +540,7 @@ test("gql retries a 5xx then succeeds", async () => {
     },
     { attempts: 3, sleep: async () => {} },
   );
-  const issues = await client.listOpenIssues("SER", "tik-tak");
+  const issues = await client.listOpenIssues(linearRepo());
   assert.deepEqual(issues, []);
   assert.equal(calls, 2);
 });
