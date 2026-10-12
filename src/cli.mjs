@@ -1,6 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.mjs";
+import { loadDotEnv } from "./env.mjs";
 import { getLinearApiKey, createLinearClient } from "./linear.mjs";
 import { getJiraCredentials, createJiraClient } from "./jira.mjs";
 import { createTracker } from "./tracker.mjs";
@@ -47,6 +48,8 @@ function parseArgs(argv) {
  */
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // Credentials live in the git-ignored `.env`; load it before anything reads the environment.
+  loadDotEnv(join(root, ".env"));
   const config = loadConfig(args.configPath);
 
   // Resolve credentials only for the providers actually in use, so a Jira-only config needs no

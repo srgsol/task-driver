@@ -25,18 +25,28 @@ any target repo.
 
 ## Requirements
 
-- **Linear API key** — `LINEAR_API_KEY` env var, or `~/.pi/linear.json`.
-  Resolved only when at least one repo uses the (default) Linear provider.
-- **Jira Cloud credentials** — `JIRA_EMAIL` + `JIRA_API_TOKEN` env vars, or
-  `~/.pi/jira.json` (`{ "email": "…", "apiToken": "…" }`). Resolved only when
-  at least one repo uses `provider: "jira"`. Auth is HTTP Basic against Jira
-  Cloud REST v3; the site root is the config's top-level `jiraBaseUrl`
-  (e.g. `https://your-company.atlassian.net`).
+- **Linear API key** — `LINEAR_API_KEY`, read from the git-ignored `.env` at the
+  project root (or from the real environment). Resolved only when at least one
+  repo uses the (default) Linear provider. `~/.pi/linear.json` still works as a
+  fallback.
+- **Jira Cloud credentials** — `JIRA_EMAIL` + `JIRA_API_TOKEN`, read from the
+  same `.env` (or the real environment). Resolved only when at least one repo
+  uses `provider: "jira"`. `~/.pi/jira.json`
+  (`{ "email": "…", "apiToken": "…" }`) still works as a fallback. Auth is
+  HTTP Basic against Jira Cloud REST v3; the site root is the config's top-level
+  `jiraBaseUrl` (e.g. `https://your-company.atlassian.net`).
 - **`GITHUB_TOKEN`** — a fine-grained PAT in each target repo's `.env`
   (gitignored), injected as `GH_TOKEN` per `gh` command. Never run
   `gh auth login` here. See the global `gh-auth` pi skill
   (`~/.pi/agent/skills/gh-auth/SKILL.md`) for the pattern.
 - **SSH push access** to each target remote (the PAT is only for `gh` API calls).
+
+Credentials come from a git-ignored `.env` at the project root, loaded on every
+run before anything reads the environment; a real environment variable always
+wins over a value in the file, and a missing `.env` is not an error. Start from
+`.env.example`. A git worktree created from this repo does not receive the
+ignored `.env` — copy or symlink it into the worktree before running there.
+
 - A **`task-driver` label** plus either a **Linear team + project per repo** or
   a **Jira project key** (`jiraProject`) — see [Configuration](#configuration).
   The controller only picks issues that carry this label, live in the repo's
