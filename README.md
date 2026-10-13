@@ -74,7 +74,7 @@ src/                      # application source (CLI + controller modules)
 test/                     # unit tests (node --test, no dependencies)
 docs/                     # design and handoff docs
 work/                     # per-run logs and plans (gitignored)
-task-driver.config.json   # repo + gate configuration
+task-driver.config.json.example  # config template; copy to task-driver.config.json (gitignored)
 eslint.config.js          # ESLint flat config for the `lint` gate
 tsconfig.json             # checkJs typecheck for the `tsc` gate (src/**/*.mjs)
 implement.md              # agent skill/prompt injected into pi runs
@@ -83,7 +83,14 @@ package.json
 
 ## Configuration
 
-`task-driver.config.json`:
+`task-driver.config.json` is git-ignored. Copy the checked-in template and edit
+it:
+
+```bash
+cp task-driver.config.json.example task-driver.config.json
+```
+
+The config has this shape:
 
 ```json
 {
