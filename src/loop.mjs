@@ -37,6 +37,11 @@ const BASE_BRANCH = "master";
  * @property {Record<string, string>} [models]
  * @property {Record<string, string>} [efforts]
  *
+ * @typedef {object} IssueComment
+ * @property {string} body
+ * @property {string | null} [createdAt]
+ * @property {{ name?: string | null } | null} [user]
+ *
  * @typedef {object} Issue
  * @property {string} id
  * @property {string} identifier
@@ -44,6 +49,7 @@ const BASE_BRANCH = "master";
  * @property {string | null} [description]
  * @property {string} url
  * @property {string[]} [labels]
+ * @property {IssueComment[] | { nodes?: IssueComment[] }} [comments]
  *
  * @typedef {object} GateResult
  * @property {string} name
@@ -81,6 +87,8 @@ const BASE_BRANCH = "master";
  * @property {(repo: { path: string; gates: GateConfig[] }) => GatesRun} runGates
  *
  * @typedef {object} Gh
+ * @property {(opts: { repoPath: string; head: string }) => { url: string; number: number } | null} [findPR]
+ *
  * @property {(opts: {
  *   repoPath: string;
  *   base: string;
@@ -127,6 +135,39 @@ export function formatPlanComment(plan) {
   return `## Implementation Plan\n\n${plan.trim()}`;
 }
 
+/** Prefixes task-driver uses on its own comments; none of them should reach the agent. */
+const AUTOMATED_COMMENT_PREFIXES = ["🤖", "⚙️", "✅", "⚠️", "❌", "## Implementation Plan"];
+
+/**
+ * Human comments only: the re-open reason usually lives here, while task-driver's own progress
+ * notes are noise (and can mention stale PRs or failures).
+ *
+ * @param {Issue} issue
+ * @returns {IssueComment[]}
+ */
+function humanComments(issue) {
+  const comments = Array.isArray(issue.comments) ? issue.comments : (issue.comments?.nodes ?? []);
+  return comments.filter((comment) => {
+    const body = comment.body?.trim();
+    if (!body) return false;
+    return !AUTOMATED_COMMENT_PREFIXES.some((prefix) => body.startsWith(prefix));
+  });
+}
+
+/**
+ * @param {IssueComment[]} comments
+ * @returns {string}
+ */
+function formatComments(comments) {
+  return comments
+    .map((comment) => {
+      const author = comment.user?.name ?? "unknown";
+      const when = comment.createdAt ? ` — ${comment.createdAt}` : "";
+      return `### ${author}${when}\n\n${comment.body.trim()}`;
+    })
+    .join("\n\n");
+}
+
 /**
  * Build the per-repo issue processing loop.
  *
@@ -162,16 +203,19 @@ export function createLoop({
     /** @type {string} */ branch,
     /** @type {string} */ planPath,
     /** @type {RepoConfig} */ repo,
-  ) =>
-    [
+  ) => {
+    const comments = formatComments(humanComments(issue));
+    return [
       `Implement ${issue.identifier}: ${issue.title}`,
       "",
       issue.description || "(no description)",
+      ...(comments ? ["", "## Comments", "", comments] : []),
       "",
       `Branch: ${branch}`,
       "",
       configBlock(planPath, repo),
     ].join("\n");
+  };
 
   const repairPrompt = (
     /** @type {Issue} */ issue,
@@ -388,14 +432,22 @@ export function createLoop({
         gatesSummary(v.gatesResult),
       ].join("\n");
       try {
-        const pr = gh.createPR({
-          repoPath: repo.path,
-          base: BASE_BRANCH,
-          head: branch,
-          title: issue.title,
-          body,
-        });
-        await tracker.comment(issue, `✅ PR opened: ${pr.url}\n\n${gatesSummary(v.gatesResult)}`);
+        // A re-opened issue usually still has the previous attempt's PR. Reuse it instead of
+        // asking `gh pr create` for a branch that already has one.
+        const existing = gh.findPR?.({ repoPath: repo.path, head: branch }) ?? null;
+        const pr =
+          existing ??
+          gh.createPR({
+            repoPath: repo.path,
+            base: BASE_BRANCH,
+            head: branch,
+            title: issue.title,
+            body,
+          });
+        const prNote = existing
+          ? `✅ PR opened on a previous attempt (already open — reusing it): ${pr.url}`
+          : `✅ PR opened: ${pr.url}`;
+        await tracker.comment(issue, `${prNote}\n\n${gatesSummary(v.gatesResult)}`);
         log(`  ✅ ${issue.identifier}: PR ${pr.url} (${branch})`);
         await bestEffort(`${issue.identifier}: could not return to ${BASE_BRANCH}`, () =>
           git.checkout(repo.path, BASE_BRANCH),
@@ -409,6 +461,10 @@ export function createLoop({
             issue,
             `⚠️ task-driver: code done and pushed on \`${branch}\`, but PR creation failed: ${message}`,
           ),
+        );
+        // Parity with the agent-failure path: leave the issue pickable for the next run.
+        await bestEffort(`${issue.identifier}: could not reopen the issue`, () =>
+          tracker.transition(issue, "reopen"),
         );
         await bestEffort(`${issue.identifier}: could not return to ${BASE_BRANCH}`, () =>
           git.checkout(repo.path, BASE_BRANCH),

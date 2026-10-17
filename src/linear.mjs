@@ -51,7 +51,29 @@ const RESOLVED_STATES = new Set(["Done", "Canceled"]);
  * @property {{ nodes?: { type: string; relatedIssue?: { state?: { name?: string } } }[] }} [relations]
  * @property {{ nodes?: { type: string; issue?: { state?: { name?: string } } }[] }} [inverseRelations]
  * @property {string[]} [labels]
+ * @property {LinearComment[]} [comments]
  */
+
+/**
+ * @typedef {object} LinearComment
+ * @property {string} body
+ * @property {string | null} createdAt
+ * @property {{ name: string | null } | null} user
+ */
+
+/**
+ * Normalize Linear's comment connection into the flat list the loop consumes.
+ *
+ * @param {any} issue
+ * @returns {LinearComment[]}
+ */
+function mapComments(issue) {
+  return (issue.comments?.nodes ?? []).map((/** @type {any} */ comment) => ({
+    body: comment.body ?? "",
+    createdAt: comment.createdAt ?? null,
+    user: comment.user ? { name: comment.user.name ?? null } : null,
+  }));
+}
 
 /**
  * True when `issue` is blocked by an issue that has not reached a terminal state.
@@ -271,6 +293,7 @@ export function createLinearClient(apiKey, fetchImpl = fetch, retry = {}) {
                 relations { nodes { type relatedIssue { state { name } } } }
                 inverseRelations { nodes { type issue { state { name } } } }
                 labels { nodes { name parent { name } } }
+                comments { nodes { body createdAt user { name } } }
               }
               pageInfo { hasNextPage endCursor }
             }
@@ -294,6 +317,7 @@ export function createLinearClient(apiKey, fetchImpl = fetch, retry = {}) {
             (/** @type {{ name: string; parent?: { name?: string } | null }} */ n) =>
               n.parent ? `${n.parent.name}:${n.name}` : n.name,
           ),
+          comments: mapComments(issue),
         }))
         .filter(
           (/** @type {LinearIssue} */ issue) => !(issue.labels ?? []).includes(repo.labels.error),
@@ -305,11 +329,16 @@ export function createLinearClient(apiKey, fetchImpl = fetch, retry = {}) {
      */
     async getIssue(identifier) {
       const data = await gql(
-        `query($id: String!) { issue(id: $id) { id identifier title description url } }`,
+        `query($id: String!) {
+          issue(id: $id) {
+            id identifier title description url
+            comments { nodes { body createdAt user { name } } }
+          }
+        }`,
         { id: identifier },
       );
       if (!data.issue) throw new Error(`Issue "${identifier}" not found`);
-      return data.issue;
+      return { ...data.issue, comments: mapComments(data.issue) };
     },
     /**
      * @param {{ teamId: string; projectId: string; title: string; description?: string }} input
