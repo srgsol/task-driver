@@ -37,6 +37,7 @@ export function getGhToken(repoPath) {
  *
  * @param {RunSync} runSync
  * @returns {{
+ *   findPR(opts: { repoPath: string; head: string }): PrResult | null;
  *   createPR(opts: {
  *     repoPath: string;
  *     base: string;
@@ -48,6 +49,26 @@ export function getGhToken(repoPath) {
  */
 export function createGh(runSync) {
   return {
+    /**
+     * Find an open PR whose head is `head`, so a re-run can reuse it instead of failing on `gh pr
+     * create`.
+     *
+     * @param {{ repoPath: string; head: string }} opts
+     * @returns {PrResult | null}
+     */
+    findPR({ repoPath, head }) {
+      const token = getGhToken(repoPath);
+      const r = runSync("gh", ["pr", "list", "--head", head, "--json", "url", "--jq", ".[0].url"], {
+        cwd: repoPath,
+        env: { ...process.env, GH_TOKEN: token },
+      });
+      const output = `${r.stdout}${r.stderr}`.trim();
+      if (r.status !== 0) throw new Error(`gh pr list failed: ${output}`);
+      if (output === "" || output === "null") return null;
+      const m = output.match(/https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/);
+      if (!m) throw new Error(`could not parse PR URL from gh output: ${output}`);
+      return { url: m[0], number: Number(m[1]) };
+    },
     /**
      * Create a GitHub pull request and parse the new PR URL from `gh` output.
      *

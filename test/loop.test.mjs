@@ -37,6 +37,7 @@ function makeDeps(opts = {}) {
     checkout: [],
     createBranch: [],
     runAgent: [],
+    findPR: [],
     createPR: [],
     pushBranch: [],
     addLabel: [],
@@ -80,6 +81,10 @@ function makeDeps(opts = {}) {
       return tracker;
     });
   const gh = {
+    findPR: (a) => {
+      calls.findPR.push(a);
+      return opts.existingPR ?? null;
+    },
     createPR: (a) => {
       calls.createPR.push(a);
       return { url: "https://x/pull/1", number: 1 };
@@ -144,6 +149,21 @@ test("happy path: claim, branch, PR, comment, back to master", async () => {
   );
   assert.deepEqual(calls.addLabel, []);
   assert.equal(calls.checkout.length, 2);
+});
+
+test("reuses an existing PR for the branch instead of creating another", async () => {
+  const { loop, calls } = makeDeps({
+    existingPR: { url: "https://github.com/x/y/pull/7", number: 7 },
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "pr");
+  assert.deepEqual(calls.findPR, [{ repoPath: "/r", head: "SER-9-fix-drag" }]);
+  assert.equal(calls.createPR.length, 0);
+  assert.ok(
+    calls.comments.some(([, body]) => body.includes("https://github.com/x/y/pull/7")),
+    "expected a comment with the existing PR URL",
+  );
+  assert.deepEqual(calls.transition, [["i1", "claim"]]);
 });
 
 test("processRepo builds a tracker for the repo and lists through it", async () => {
@@ -212,6 +232,26 @@ test("failure path after two failures: comment, push, reopen", async () => {
     ["i1", "reopen"],
   ]);
   assert.equal(calls.addLabel.length, 0);
+});
+
+test("PR creation failure moves the issue back to Todo", async () => {
+  const { loop, calls } = makeDeps({
+    gh: {
+      createPR: () => {
+        throw new Error("a pull request for branch SER-9-fix-drag already exists");
+      },
+    },
+  });
+  const results = await loop(false);
+  assert.equal(results[0].outcome, "pr-failed");
+  assert.deepEqual(calls.transition, [
+    ["i1", "claim"],
+    ["i1", "reopen"],
+  ]);
+  assert.ok(
+    calls.comments.some(([, body]) => /PR creation failed/.test(body)),
+    "expected a PR-failure note",
+  );
 });
 
 test("preflight skips a dirty repo", async () => {
@@ -287,6 +327,66 @@ test("agent message includes the plan path and gates", async () => {
   assert.match(msg, /- npm test/);
   assert.match(msg, /- npx tsc --noEmit/);
   assert.match(msg, /- npm run lint/);
+});
+
+test("agent message includes human comments and hides task-driver's own comments", async () => {
+  const human = {
+    body: "Re-opened because the drag handle still jumps on touch",
+    createdAt: "2025-01-02T03:04:05Z",
+    user: { name: "Alice" },
+  };
+  const automated = [
+    { body: "🤖 task-driver: implementing SER-9 on branch `x`", user: { name: "bot" } },
+    { body: "⚙️ task-driver run parameters — model `x`", user: { name: "bot" } },
+    { body: "## Implementation Plan\n\n# plan", user: { name: "bot" } },
+    { body: "✅ PR opened: https://x/pull/1", user: { name: "bot" } },
+    { body: "⚠️ task-driver: PR creation failed", user: { name: "bot" } },
+    { body: "❌ task-driver could not complete SER-9", user: { name: "bot" } },
+  ];
+  const { loop, calls } = makeDeps({
+    issues: [{ ...DEFAULT_ISSUE, comments: [human, ...automated] }],
+  });
+  await loop(false);
+  const msg = calls.runAgent[0].message;
+  assert.match(msg, /## Comments/);
+  assert.match(msg, /Re-opened because the drag handle still jumps on touch/);
+  assert.match(msg, /Alice/);
+  for (const comment of automated) {
+    assert.ok(
+      !msg.includes(comment.body.split("\n")[0]),
+      `automated comment leaked: ${comment.body}`,
+    );
+  }
+  assert.ok(msg.indexOf(human.body) > msg.indexOf("desc"), "comments follow the description");
+  assert.ok(msg.indexOf(human.body) < msg.indexOf("Branch:"), "comments precede the branch");
+});
+
+test("agent message reads comments from a raw Linear connection", async () => {
+  const { loop, calls } = makeDeps({
+    issues: [
+      {
+        ...DEFAULT_ISSUE,
+        comments: {
+          nodes: [{ body: "Please address the regression", user: { name: "Bob" } }],
+        },
+      },
+    ],
+  });
+  await loop(false);
+  assert.match(calls.runAgent[0].message, /Please address the regression/);
+});
+
+test("agent message omits the comments section when only automated comments exist", async () => {
+  const { loop, calls } = makeDeps({
+    issues: [
+      {
+        ...DEFAULT_ISSUE,
+        comments: [{ body: "🤖 task-driver: implementing SER-9", user: { name: "bot" } }],
+      },
+    ],
+  });
+  await loop(false);
+  assert.doesNotMatch(calls.runAgent[0].message, /## Comments/);
 });
 
 test("repair message uses injected gates, not the old literal list", async () => {

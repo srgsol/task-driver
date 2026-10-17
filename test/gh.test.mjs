@@ -48,3 +48,42 @@ test("createPR throws on non-zero", () => {
     /gh pr create failed/,
   );
 });
+
+test("findPR returns the open PR for a branch", () => {
+  let seenArgs;
+  let seenEnv;
+  const gh = createGh((cmd, args, opts) => {
+    seenArgs = args;
+    seenEnv = opts.env;
+    return { status: 0, stdout: "https://github.com/x/y/pull/7\n", stderr: "" };
+  });
+  const dir = mkdtempSync(join(tmpdir(), "gh-"));
+  writeFileSync(join(dir, ".env"), "GITHUB_TOKEN=tok\n");
+  const pr = gh.findPR({ repoPath: dir, head: "SER-9-x" });
+  assert.deepEqual(seenArgs, [
+    "pr",
+    "list",
+    "--head",
+    "SER-9-x",
+    "--json",
+    "url",
+    "--jq",
+    ".[0].url",
+  ]);
+  assert.equal(seenEnv.GH_TOKEN, "tok");
+  assert.deepEqual(pr, { url: "https://github.com/x/y/pull/7", number: 7 });
+});
+
+test("findPR returns null when the branch has no open PR", () => {
+  const gh = createGh(() => ({ status: 0, stdout: "null\n", stderr: "" }));
+  const dir = mkdtempSync(join(tmpdir(), "gh-"));
+  writeFileSync(join(dir, ".env"), "GITHUB_TOKEN=tok\n");
+  assert.equal(gh.findPR({ repoPath: dir, head: "SER-9-x" }), null);
+});
+
+test("findPR throws on non-zero", () => {
+  const gh = createGh(() => ({ status: 1, stdout: "", stderr: "denied" }));
+  const dir = mkdtempSync(join(tmpdir(), "gh-"));
+  writeFileSync(join(dir, ".env"), "GITHUB_TOKEN=tok\n");
+  assert.throws(() => gh.findPR({ repoPath: dir, head: "x" }), /gh pr list failed/);
+});

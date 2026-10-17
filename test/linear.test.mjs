@@ -76,6 +76,86 @@ test("listOpenIssues requests relation fields", async () => {
   assert.match(seenQuery, /inverseRelations/);
 });
 
+test("listOpenIssues requests and maps issue comments", async () => {
+  let seenQuery;
+  const comments = {
+    nodes: [
+      {
+        body: "Please keep the API stable",
+        createdAt: "2025-01-02T03:04:05Z",
+        user: { name: "Alice" },
+      },
+    ],
+  };
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q) => {
+      seenQuery = q;
+      return {
+        issues: {
+          nodes: [
+            {
+              id: "i1",
+              identifier: "SER-1",
+              title: "t",
+              description: null,
+              url: "u1",
+              comments,
+            },
+          ],
+        },
+      };
+    }),
+  );
+  const issues = await client.listOpenIssues(linearRepo());
+  assert.match(seenQuery, /comments\s*\{\s*nodes\s*\{\s*body\s+createdAt\s+user\s*\{\s*name\s*\}/);
+  assert.deepEqual(issues[0].comments, [
+    {
+      body: "Please keep the API stable",
+      createdAt: "2025-01-02T03:04:05Z",
+      user: { name: "Alice" },
+    },
+  ]);
+});
+
+test("getIssue requests and maps comments", async () => {
+  let seenQuery;
+  const comments = {
+    nodes: [
+      {
+        body: "Re-opened: the fix missed the edge case",
+        createdAt: "2025-02-03T04:05:06Z",
+        user: { name: "Bob" },
+      },
+    ],
+  };
+  const client = createLinearClient(
+    "k",
+    fakeFetch((q) => {
+      seenQuery = q;
+      return {
+        issue: {
+          id: "i1",
+          identifier: "SER-1",
+          title: "t",
+          description: null,
+          url: "u1",
+          comments,
+        },
+      };
+    }),
+  );
+  const issue = await client.getIssue("SER-1");
+  assert.match(seenQuery, /comments\s*\{\s*nodes\s*\{\s*body\s+createdAt\s+user\s*\{\s*name\s*\}/);
+  assert.deepEqual(issue.comments, [
+    {
+      body: "Re-opened: the fix missed the edge case",
+      createdAt: "2025-02-03T04:05:06Z",
+      user: { name: "Bob" },
+    },
+  ]);
+});
+
 test("listOpenIssues skips issues blocked by an unresolved issue", async () => {
   const nodes = [
     {
