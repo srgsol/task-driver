@@ -10,6 +10,7 @@
  *   opts?: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string },
  * ) => { status: number; stdout: string; stderr: string }} RunSync
  *
+ *
  * @typedef {object} Git
  * @property {(repoPath: string) => boolean} isClean
  * @property {(repoPath: string) => string} currentBranch
