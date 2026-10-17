@@ -1,0 +1,35 @@
+{
+  "repos": [
+    {
+      "name": "tiktak",
+      "path": "../tiktak",
+      "team": "SER",
+      "project": "tik-tak",
+      "remote": "git@github.com:your-org/tiktak.git",
+      "gates": [
+        { "name": "test", "cmd": "npm", "args": ["test"] },
+        { "name": "tsc", "cmd": "npx", "args": ["tsc", "--noEmit"] },
+        { "name": "lint", "cmd": "npm", "args": ["run", "lint"] }
+      ]
+    },
+    {
+      "name": "company-repo",
+      "path": "../company-repo",
+      "provider": "jira",
+      "jiraProject": "PROJ",
+      "jiraIssueType": "Task",
+      "jiraBlockingLinkTypes": ["blocks"],
+      "workflow": { "open": "To Do", "claim": "In Progress" },
+      "labels": { "pick": "task-driver", "error": "ai:error" },
+      "remote": "git@github.com:your-org/company-repo.git",
+      "gates": [{ "name": "test", "cmd": "npm", "args": ["test"] }]
+    }
+  ],
+  "jiraBaseUrl": "https://your-company.atlassian.net",
+  "attempts": 2,
+  "timeoutMs": 900000,
+  "gateTimeoutMs": 300000,
+  "thinking": "medium",
+  "models": { "fast": "openai/gpt-4o-mini", "sonnet-4.5": "anthropic/claude-sonnet-4.5" },
+  "efforts": { "low": "low", "high": "high" }
+}

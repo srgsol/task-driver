@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, mkdtempSync } from "node:fs";
+import { writeFileSync, mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,8 +97,22 @@ test("loadConfig resolves repo paths relative to the config file", () => {
   assert.equal(c.repos[0].path, resolve(dir, "../tiktak"));
 });
 
-test("task-driver repo declares test, tsc, and lint gates", () => {
+test("task-driver.config.json.example is a valid config template", () => {
+  const p = fileURLToPath(new URL("../task-driver.config.json.example", import.meta.url));
+  const c = loadConfig(p);
+  assert.ok(c.repos.length > 0, "template configures at least one repo");
+  for (const r of c.repos) {
+    assert.ok(r.name && r.path && r.remote, `template repo ${r.name} has name, path, remote`);
+  }
+});
+
+test("task-driver repo declares test, tsc, and lint gates", (t) => {
   const p = fileURLToPath(new URL("../task-driver.config.json", import.meta.url));
+  // The local config is git-ignored, so it is absent on a fresh checkout.
+  if (!existsSync(p)) {
+    t.skip("no local task-driver.config.json (git-ignored); nothing to assert");
+    return;
+  }
   const c = loadConfig(p);
   const td = c.repos.find((r) => r.name === "task-driver");
   assert.ok(td, "task-driver repo is configured");
